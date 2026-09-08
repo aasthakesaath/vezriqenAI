@@ -13,6 +13,8 @@ import { detectGaps, selectTopGaps, type AuditInputs, type Gap } from "./audit";
 export type GoalSnapshot = {
   goal: {
     id: string;
+    /** The six-word name. Without it goalLabel falls back to a cut statement. */
+    short_label: string | null;
     normalized_goal: string | null;
     user_goal_text: string | null;
     target_date: string | null;
@@ -52,7 +54,7 @@ export async function loadGoalSnapshot(options: {
   const { data: goal } = await supabase
     .from("goals")
     .select(
-      "id, normalized_goal, user_goal_text, target_date, success_criteria, constraints, status, activated_at, primary_flag",
+      "id, short_label, normalized_goal, user_goal_text, target_date, success_criteria, constraints, status, activated_at, primary_flag",
     )
     .eq("id", goalId)
     .maybeSingle();
@@ -183,6 +185,7 @@ export async function loadGoalSnapshot(options: {
   return {
     goal: {
       id: goal.id,
+      short_label: goal.short_label,
       normalized_goal: goal.normalized_goal,
       user_goal_text: goal.user_goal_text,
       target_date: goal.target_date,

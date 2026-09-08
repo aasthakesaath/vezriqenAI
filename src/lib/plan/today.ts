@@ -99,6 +99,11 @@ const OPEN_STATUSES = new Set(["not_started", "in_progress", "unconfirmed", "par
  */
 export function neutralReason(task: { rationale: string | null; taskType: string }): string {
   if (task.rationale?.trim()) return task.rationale.trim();
+  return typeReason(task);
+}
+
+/** The fallback half of the above, for callers that punctuate it themselves. */
+function typeReason(task: { taskType: string }): string {
   switch (task.taskType) {
     case "external_dependency":
       return "someone else has to act before this can close";
@@ -259,4 +264,25 @@ export function selectWaitingOn(candidates: CandidateTask[]): CandidateTask[] {
     .filter((t) => OPEN_STATUSES.has(t.status) && t.blockedOnPerson)
     .sort((a, b) => a.priority - b.priority)
     .slice(0, 5);
+}
+
+/**
+ * The one line of context under a task title, as a finished sentence.
+ *
+ * The two screens each punctuated this themselves and got different answers:
+ * the goal page rendered "Because {reason}." around whatever came back, which
+ * turned a model-written sentence into "Because This is a key piece of
+ * independent validation." — a capital letter mid-sentence and a clause that
+ * does not parse. /today rendered it bare, which left the type fallbacks as
+ * sentence fragments.
+ *
+ * So the sentence is built once, here. A rationale is used verbatim apart from
+ * a full stop: §7 forbids re-wording what the model actually said about a
+ * plan, so it is punctuated, not edited. Only the fallback, which this file
+ * wrote itself, gets the "Because" it was phrased for.
+ */
+export function taskContextLine(task: { rationale: string | null; taskType: string }): string {
+  const rationale = task.rationale?.trim();
+  if (rationale) return /[.!?]$/.test(rationale) ? rationale : `${rationale}.`;
+  return `Because ${typeReason(task)}.`;
 }

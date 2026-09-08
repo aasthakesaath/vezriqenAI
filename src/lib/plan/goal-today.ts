@@ -22,7 +22,7 @@
  * what a Tuesday in Chicago looks like without waiting for one.
  */
 
-import { neutralReason } from "./today";
+import { taskContextLine } from "./today";
 import { formatDayKey } from "@/lib/time";
 import { daysBetween, toDayKey, type DayKey } from "@/lib/time-zone";
 
@@ -62,7 +62,7 @@ export type Urgency = {
 
 export type GoalTodayTask = GoalTaskInput & {
   urgency: Urgency;
-  /** Why this matters, in one line. The model's sentence when it wrote one. */
+  /** Why this matters, as a finished sentence. Rendered as-is, never wrapped. */
   reason: string;
   /** Higher is more urgent. Never rendered — §17 forbids a visible score. */
   rank: number;
@@ -189,7 +189,7 @@ export function selectGoalToday(
     chosen.push({
       ...task,
       urgency,
-      reason: neutralReason(task),
+      reason: taskContextLine(task),
       rank: rankOf(task, urgency),
     });
   }

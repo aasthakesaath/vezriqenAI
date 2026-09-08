@@ -94,7 +94,9 @@ function TaskRow({ task }: { task: GoalTaskView }) {
           </div>
 
           <h3 className="mt-2 text-[1.05rem] font-semibold leading-snug text-ink">{task.title}</h3>
-          <p className="mt-1 text-[0.95rem] leading-relaxed text-mauve">Because {task.reason}.</p>
+          {/* Already a sentence — see taskContextLine. Wrapping it here is
+              what produced "Because This is a key piece…". */}
+          <p className="mt-1 text-[0.95rem] leading-relaxed text-mauve">{task.reason}</p>
 
           {(task.estimatedMinutes || task.milestoneTitle || task.waitingOn) && (
             <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-mauve-light">

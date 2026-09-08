@@ -123,12 +123,28 @@ describe("the order the list is read in", () => {
     expect(tasks).toHaveLength(2);
   });
 
-  it("gives every row a line about why it matters", () => {
+  it("gives every row a line about why it matters, as a finished sentence", () => {
     const { tasks } = selectGoalToday(
       [task({ deadline: TODAY, rationale: null, taskType: "submission" })],
       TODAY,
     );
-    expect(tasks[0]!.reason).toBe("it has a hard cut-off");
+    expect(tasks[0]!.reason).toBe("Because it has a hard cut-off.");
+  });
+
+  /**
+   * The line arrives ready to render. Both screens used to punctuate it
+   * themselves and disagreed: wrapping a model-written sentence in
+   * "Because {reason}." produced "Because This is a key piece of independent
+   * validation." — a capital letter mid-sentence. §7 also forbids re-wording
+   * what the model said about a plan, so it is punctuated, never edited.
+   */
+  it("uses the model's own sentence verbatim, only punctuating it", () => {
+    const { tasks } = selectGoalToday(
+      [task({ deadline: TODAY, rationale: "This is a key piece of independent validation" })],
+      TODAY,
+    );
+    expect(tasks[0]!.reason).toBe("This is a key piece of independent validation.");
+    expect(tasks[0]!.reason).not.toContain("Because");
   });
 
   it("never exposes the number it sorted by (§17)", () => {
