@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { VezriPoseImage } from "@/components/VezriWorking";
 import Link from "next/link";
 import FeedbackForm from "@/components/FeedbackForm";
 import { BRAND, ROUTES } from "@/lib/site";
@@ -18,7 +19,9 @@ export default function FeedbackPage() {
         <span aria-hidden="true">&larr;</span> Back to home
       </Link>
 
-      <h1 className="mt-6 text-4xl font-bold tracking-tight text-ink">Feedback</h1>
+      <div className="flex items-start justify-between gap-6"><h1 className="mt-6 text-4xl font-bold tracking-tight text-ink">Feedback</h1>
+        <VezriPoseImage pose="thinking" alt="" className="h-14 w-auto shrink-0 sm:h-20" />
+      </div>
       <p className="mt-4 text-lg leading-relaxed text-mauve">
         Tell us what is working, what is not, and what you wish Vezri could do. Every message is read
         by the {BRAND} team.

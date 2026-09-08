@@ -71,7 +71,7 @@ export default async function TodayPage() {
         <VezriPoseImage
           pose={POSE_FOR.goalHealth}
           alt=""
-          className="hidden h-24 w-auto shrink-0 sm:block"
+          className="h-16 w-auto shrink-0 sm:h-24"
         />
       </div>
 

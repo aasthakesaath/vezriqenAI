@@ -10,6 +10,8 @@ const ProfileSchema = z
     reminder_style: z.enum(["early_heads_up", "close_to_task", "both"]).optional(),
     accountability_level: z.enum(["gentle", "balanced", "keep_me_accountable"]).optional(),
     productive_window: z.enum(["morning", "afternoon", "evening", "varies"]).optional(),
+    /** In-app has no flag: it is always on (see migration 0006). */
+    email_reminders: z.boolean().optional(),
     quiet_hours_start: z.number().int().min(0).max(23).nullable().optional(),
     quiet_hours_end: z.number().int().min(0).max(23).nullable().optional(),
     timezone: z.string().max(64).optional(),
@@ -35,7 +37,7 @@ export async function PATCH(request: Request) {
     .from("profiles")
     .update(parsed.data)
     .eq("id", user.id)
-    .select("reminder_style, accountability_level, productive_window, quiet_hours_start, quiet_hours_end")
+    .select("reminder_style, accountability_level, productive_window, email_reminders, quiet_hours_start, quiet_hours_end")
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

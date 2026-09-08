@@ -96,9 +96,13 @@ export default function PlanIntake() {
 
   return (
     <div className="shell max-w-2xl py-12 lg:py-16">
-      <h1 className="text-balance text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-        {ONBOARDING_HEADING}
-      </h1>
+      <div className="flex items-start justify-between gap-6">
+        <h1 className="text-balance text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+          {ONBOARDING_HEADING}
+        </h1>
+        {/* Reading: this screen is where a plan is handed over. */}
+        <VezriPoseImage pose="reading" alt="" className="h-16 w-auto shrink-0 sm:h-24" />
+      </div>
       <p className="mt-3 text-lg leading-relaxed text-mauve">
         Bring the plan you already have. Vezri reads it and turns it into something you can follow.
       </p>

@@ -3,6 +3,7 @@ import Wordmark from "@/components/Wordmark";
 import { BRAND, CTA_SUPPORT, ROUTES } from "@/lib/site";
 import { SUPABASE_CONFIGURED } from "@/lib/env";
 import EmailAuthForm from "@/components/EmailAuthForm";
+import { VezriPoseImage } from "@/components/VezriWorking";
 
 function GoogleMark() {
   return (
@@ -21,6 +22,7 @@ export default function AuthPanel({ mode }: { mode: "signin" | "signup" }) {
   return (
     <div className="shell flex max-w-md flex-col items-center py-14 text-center lg:py-20">
       <Wordmark />
+      <VezriPoseImage pose="thinking" alt="" className="mt-6 h-24 w-auto" />
 
       <h1 className="mt-8 text-3xl font-bold tracking-tight text-ink">
         {isSignUp ? `Start with ${BRAND}` : `Welcome back to ${BRAND}`}

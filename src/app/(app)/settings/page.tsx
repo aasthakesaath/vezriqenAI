@@ -4,6 +4,8 @@ import { createClient, getUser } from "@/lib/supabase/server";
 import CalendarConnection from "@/components/app/CalendarConnection";
 import ReminderPreferences from "@/components/app/ReminderPreferences";
 import { isCalendarConfigured } from "@/lib/calendar/google";
+import { getEmailProvider } from "@/lib/email";
+import { VezriPoseImage, POSE_FOR } from "@/components/VezriWorking";
 import { APP_ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = { title: "Settings", robots: { index: false } };
@@ -21,7 +23,7 @@ export default async function SettingsPage({
   const [{ data: profile }, { data: connection }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("reminder_style, accountability_level, productive_window, quiet_hours_start, quiet_hours_end")
+      .select("reminder_style, accountability_level, productive_window, email_reminders, quiet_hours_start, quiet_hours_end")
       .eq("id", user!.id)
       .maybeSingle(),
     supabase
@@ -36,7 +38,14 @@ export default async function SettingsPage({
       <Link href={APP_ROUTES.today} className="text-sm font-medium text-berry hover:underline">
         ← Today
       </Link>
-      <h1 className="mt-4 text-3xl font-bold tracking-tight text-ink sm:text-4xl">Settings</h1>
+      <div className="mt-4 flex items-start justify-between gap-6">
+        <h1 className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">Settings</h1>
+        <VezriPoseImage
+          pose={POSE_FOR.goalHealth}
+          alt=""
+          className="h-16 w-auto shrink-0 sm:h-24"
+        />
+      </div>
 
       <div className="mt-8 space-y-6">
         <ReminderPreferences
@@ -45,6 +54,8 @@ export default async function SettingsPage({
           productiveWindow={profile?.productive_window ?? "varies"}
           quietStart={profile?.quiet_hours_start ?? null}
           quietEnd={profile?.quiet_hours_end ?? null}
+          emailReminders={profile?.email_reminders ?? true}
+          emailConfigured={getEmailProvider().configured}
         />
 
         <CalendarConnection

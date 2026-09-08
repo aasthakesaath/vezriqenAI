@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import AppHeader from "@/components/app/AppHeader";
-import { getUser } from "@/lib/supabase/server";
+import { createClient, getUser } from "@/lib/supabase/server";
+import { loadBellReminders } from "@/lib/reminders/bell";
 import { SUPABASE_CONFIGURED } from "@/lib/env";
 
 /**
@@ -40,10 +41,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     user.email ??
     null;
 
+  const supabase = await createClient();
+  const reminders = await loadBellReminders({ supabase });
+
   return (
-    <>
-      <AppHeader name={name} />
+    // The signed-in product sits on the softest tint in the palette so white
+    // cards lift off it. blush-wash and not blush-light or cream-light: those
+    // two are dark enough that mauve-light and rose fail AA on them, which is
+    // measured in tests/palette-contrast.test.ts rather than judged by eye.
+    // min-h-screen so the tint reaches the bottom of a short page.
+    <div className="min-h-screen bg-blush-wash">
+      <AppHeader name={name} reminders={reminders} />
       <main id="main">{children}</main>
-    </>
+    </div>
   );
 }

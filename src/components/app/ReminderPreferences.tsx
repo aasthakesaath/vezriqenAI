@@ -85,12 +85,17 @@ export default function ReminderPreferences({
   productiveWindow,
   quietStart,
   quietEnd,
+  emailReminders,
+  emailConfigured,
 }: {
   reminderStyle: string;
   accountability: string;
   productiveWindow: string;
   quietStart: number | null;
   quietEnd: number | null;
+  emailReminders: boolean;
+  /** Whether this deployment can actually send mail. */
+  emailConfigured: boolean;
 }) {
   const [values, setValues] = useState<Record<string, string>>({
     reminder_style: reminderStyle,
@@ -104,6 +109,7 @@ export default function ReminderPreferences({
    * render its own zone, which then mismatches on hydration and — worse —
    * would be wrong for everyone not sitting in the datacentre.
    */
+  const [email, setEmail] = useState(emailReminders);
   const [timeZone, setTimeZone] = useState<string | null>(null);
   useEffect(() => setTimeZone(browserTimeZone()), []);
 
@@ -157,6 +163,61 @@ export default function ReminderPreferences({
             </div>
           </fieldset>
         ))}
+
+        <fieldset>
+          <legend className="text-[0.95rem] font-semibold text-ink">How reminders reach you</legend>
+
+          <div className="mt-2 flex items-start gap-3 rounded-xl bg-blush-wash px-4 py-3">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-berry bg-berry text-white"
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12.5l4.5 4.5L19 7" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-[0.95rem] font-medium text-ink">
+                In the app <span className="font-normal text-mauve">— always on</span>
+              </p>
+              {/* Not a toggle, because it is not a choice. The reminder row IS
+                  the in-app reminder; there is nothing to switch off, and this
+                  is what guarantees a reminder always has somewhere to appear. */}
+              <p className="mt-0.5 text-sm text-mauve-light">
+                Every reminder appears in the bell at the top of the screen. This can&rsquo;t be
+                turned off — it&rsquo;s what makes sure nothing is lost.
+              </p>
+            </div>
+          </div>
+
+          <label className="mt-3 flex items-start gap-3 rounded-xl px-4 py-3">
+            <input
+              type="checkbox"
+              checked={email}
+              onChange={(e) => {
+                setEmail(e.target.checked);
+                void save({ email_reminders: e.target.checked });
+              }}
+              className="mt-0.5 h-5 w-5 shrink-0 rounded-md border-blush text-berry focus:ring-berry"
+            />
+            <span>
+              <span className="text-[0.95rem] font-medium text-ink">Email</span>
+              <span className="mt-0.5 block text-sm text-mauve-light">
+                For the ones that need an answer.
+              </span>
+              {!emailConfigured && (
+                // The toggle shows the real preference; this says what the
+                // system can actually do about it. Softening either one to make
+                // the other look consistent would be the dishonest option.
+                <span className="mt-2 block rounded-lg bg-cream-light px-3 py-2 text-sm leading-relaxed text-ink">
+                  Email delivery isn&rsquo;t switched on in this environment yet, so nothing is
+                  being sent by email right now. Your preference is saved and email will start
+                  working once it is — you won&rsquo;t need to do anything.
+                </span>
+              )}
+            </span>
+          </label>
+        </fieldset>
 
         <fieldset>
           <legend className="text-[0.95rem] font-semibold text-ink">Quiet hours</legend>

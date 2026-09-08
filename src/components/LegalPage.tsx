@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { VezriPoseImage } from "@/components/VezriWorking";
 import { LEGAL_LAST_UPDATED, ROUTES } from "@/lib/site";
 
 /**
@@ -24,7 +25,10 @@ export default function LegalPage({
         <span aria-hidden="true">&larr;</span> Back to home
       </Link>
 
-      <h1 className="mt-6 text-4xl font-bold tracking-tight text-ink">{title}</h1>
+      <div className="flex items-start justify-between gap-6">
+        <h1 className="mt-6 text-4xl font-bold tracking-tight text-ink">{title}</h1>
+        <VezriPoseImage pose="reading" alt="" className="h-14 w-auto shrink-0 sm:h-20" />
+      </div>
       <p className="mt-2 text-sm text-mauve-light">Last updated {LEGAL_LAST_UPDATED}</p>
       <p className="mt-6 text-lg leading-relaxed text-mauve">{intro}</p>
 

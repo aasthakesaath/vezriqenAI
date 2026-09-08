@@ -130,6 +130,8 @@ describe("no screen renders a bare 24-hour time", () => {
         productiveWindow="varies"
         quietStart={22}
         quietEnd={7}
+        emailReminders
+        emailConfigured={false}
       />,
     );
     const text = textOf(markup);

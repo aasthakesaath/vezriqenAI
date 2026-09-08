@@ -1,5 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
+import AppNav from "./AppNav";
+import ReminderBell, { type BellReminder } from "./ReminderBell";
 import { BRAND } from "@/lib/site";
 import { APP_ROUTES } from "@/lib/routes";
 
@@ -7,49 +9,40 @@ import { APP_ROUTES } from "@/lib/routes";
  * Chrome for the signed-in product. Quieter than the marketing header — no
  * conversion CTAs — but still branded Vezriqen AI™ everywhere (PRD §30.7).
  */
-export default function AppHeader({ name }: { name?: string | null }) {
+export default function AppHeader({
+  name,
+  reminders = [],
+}: {
+  name?: string | null;
+  reminders?: BellReminder[];
+}) {
   return (
-    // Opaque, not bg-white/90 + backdrop-blur. A translucent sticky header
-    // lets the page show through it: on Settings the reminder pills ghosted
-    // behind the wordmark and every card was sheared off mid-line at the
-    // header's bottom edge, which reads as broken rendering rather than as a
-    // frosted effect. backdrop-blur goes with it — it does nothing behind an
-    // opaque surface except cost a compositing layer.
+    // Opaque, not bg-white/90 + backdrop-blur. A translucent sticky header lets
+    // the page show through it: on Settings the reminder pills ghosted behind
+    // the wordmark and every card was sheared off mid-line at the header's
+    // bottom edge, which reads as broken rendering rather than as a frosted
+    // effect. backdrop-blur goes with it — it does nothing behind an opaque
+    // surface except cost a compositing layer.
+    // `relative` so the mobile menu can anchor to the header rather than the page.
     <header className="sticky top-0 z-50 border-b border-blush/60 bg-white">
-      <div className="shell flex h-[4.5rem] items-center justify-between gap-4">
-        <Link href={APP_ROUTES.today} className="flex items-center gap-2.5" aria-label={`${BRAND} home`}>
+      <div className="shell relative flex h-[4.5rem] items-center justify-between gap-3">
+        <Link
+          href={APP_ROUTES.today}
+          className="flex min-w-0 items-center gap-2.5"
+          aria-label={`${BRAND} home`}
+        >
           <span className="relative block h-9 w-9 shrink-0 overflow-hidden rounded-full bg-blush-wash ring-1 ring-blush">
-            <Image
-              src="/brand/vezri-avatar.webp"
-              alt=""
-              width={256}
-              height={256}
-              className="h-full w-full"
-            />
+            <Image src="/brand/vezri-avatar.webp" alt="" width={256} height={256} className="h-full w-full" />
           </span>
-          <span className="block text-[1.35rem] font-bold tracking-tight text-berry">{BRAND}</span>
+          <span className="truncate text-[1.15rem] font-bold tracking-tight text-berry sm:text-[1.35rem]">
+            {BRAND}
+          </span>
         </Link>
 
-        <nav aria-label="Primary" className="flex items-center gap-5">
-          <Link
-            href={APP_ROUTES.today}
-            className="text-[0.95rem] font-medium text-mauve transition-colors hover:text-berry"
-          >
-            Today
-          </Link>
-          <Link
-            href={APP_ROUTES.reminders}
-            className="text-[0.95rem] font-medium text-mauve transition-colors hover:text-berry"
-          >
-            Reminders
-          </Link>
-          <Link
-            href={APP_ROUTES.settings}
-            className="text-[0.95rem] font-medium text-mauve transition-colors hover:text-berry"
-          >
-            Settings
-          </Link>
-          <form action="/api/auth/signout" method="post">
+        <div className="flex shrink-0 items-center gap-3">
+          <AppNav />
+          <ReminderBell reminders={reminders} />
+          <form action="/api/auth/signout" method="post" className="hidden sm:block">
             <button
               type="submit"
               className="rounded-pill border border-blush px-4 py-2 text-sm font-semibold text-berry transition-colors hover:bg-blush-wash"
@@ -57,7 +50,7 @@ export default function AppHeader({ name }: { name?: string | null }) {
               Sign out
             </button>
           </form>
-        </nav>
+        </div>
       </div>
       {name ? <span className="sr-only">Signed in as {name}</span> : null}
     </header>

@@ -20,6 +20,13 @@ import { SITE_URL } from "@/lib/env";
  *     leave sent_at null, and the reminders table's check constraint makes the
  *     dishonest combination unrepresentable.
  *   * Failures are logged clearly rather than swallowed.
+ *
+ * THE CHANNEL IS RESOLVED HERE, NOT AT SCHEDULE TIME. A reminder row carries
+ * no email intent; this function reads profiles.email_reminders when the
+ * reminder comes due. That is the difference between a preference that works
+ * and one that does not: written into the row at activation, turning email on
+ * would do nothing until the next goal was started, and every reminder already
+ * scheduled would keep whatever setting was in force months earlier.
  */
 
 export type DispatchSummary = {
@@ -27,6 +34,8 @@ export type DispatchSummary = {
   emailed: number;
   suppressed: number;
   failed: number;
+  /** Suppressed because the user turned the email channel off. */
+  optedOut?: number;
   /** Present when no provider key is configured, for the caller to surface. */
   notice: string | null;
 };
@@ -73,7 +82,7 @@ export async function dispatchDueReminders(options: {
   const userIds = [...new Set(rows.map((r) => r.user_id))];
   const { data: profiles } = await admin
     .from("profiles")
-    .select("id, email, name")
+    .select("id, email, name, email_reminders")
     .in("id", userIds);
   const profileFor = new Map((profiles ?? []).map((p) => [p.id, p]));
 
@@ -118,6 +127,21 @@ export async function dispatchDueReminders(options: {
         })
         .eq("id", reminder.id);
       summary.suppressed += 1;
+      continue;
+    }
+
+    // The user turned the email channel off. In-app is untouched — the row is
+    // already visible in the reminder centre and stays there.
+    if (profile && profile.email_reminders === false) {
+      await admin
+        .from("reminders")
+        .update({
+          delivery_status: "suppressed",
+          failure_reason: "Email reminders are off in your settings; shown in the app only.",
+        })
+        .eq("id", reminder.id);
+      summary.suppressed += 1;
+      summary.optedOut = (summary.optedOut ?? 0) + 1;
       continue;
     }
 
@@ -184,7 +208,13 @@ export async function dispatchDueReminders(options: {
 
     await admin
       .from("reminders")
-      .update({ delivery_status: "sent", sent_at: new Date().toISOString() })
+      .update({
+        delivery_status: "sent",
+        sent_at: new Date().toISOString(),
+        // The row was created as in_app; it becomes email only once one
+        // genuinely went out.
+        channel: "email",
+      })
       .eq("id", reminder.id);
     summary.emailed += 1;
   }

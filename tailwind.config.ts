@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { COLORS } from "./src/lib/palette";
 
 /**
  * Palette A from PRD §30.2, plus `berry` — a deeper brand shade derived from the
@@ -23,15 +24,8 @@ const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
-      colors: {
-        rose: { DEFAULT: "#AE566B", soft: "#DCB0BB", surface: "#C98F9D" },
-        blush: { DEFAULT: "#E8C1C8", light: "#F7E7EA", wash: "#FDF6F7" },
-        mauve: { DEFAULT: "#76545D", light: "#876A72" },
-        cream: { DEFAULT: "#F5E8D7", light: "#FBF4EC" },
-        gold: { DEFAULT: "#C9A15C", light: "#E3CDA3" },
-        berry: { DEFAULT: "#A82449", deep: "#8C1B3B", light: "#C2416A" },
-        ink: { DEFAULT: "#1F1216", muted: "#5A464C" },
-      },
+      // One source of truth, shared with the contrast test (src/lib/palette.ts).
+      colors: COLORS,
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         script: ["var(--font-script)", "cursive"],
