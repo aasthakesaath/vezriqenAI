@@ -85,6 +85,26 @@ export function formatDayKey(day: string | null | undefined): string {
   }).format(new Date(Date.UTC(year, month - 1, date)));
 }
 
+/**
+ * A calendar day, with the year. "31 Dec 2026"
+ *
+ * Separate from formatDayKey because most dates in the product are days away
+ * and the year is noise on them. A goal's target date is the exception: it is
+ * routinely a year or more out, and "31 Dec" beside a two-year plan does not
+ * say which December.
+ */
+export function formatDayKeyYear(day: string | null | undefined): string {
+  if (!day) return "";
+  const [year, month, date] = day.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !date) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, date)));
+}
+
 /** The same, with room for the weekday. "Thursday, 1 October" */
 export function formatLongDayKey(day: string | null | undefined): string {
   if (!day) return "";

@@ -4,32 +4,50 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { loadGoalSnapshot } from "@/lib/health/load";
 import HealthCard from "@/components/app/HealthCard";
-import AuditPanel from "@/components/app/AuditPanel";
-import ProvenanceBadge from "@/components/plan/ProvenanceBadge";
 import Disclosure from "@/components/app/Disclosure";
-import PlanViewTabs from "@/components/app/PlanViewTabs";
-import { VezriPoseImage } from "@/components/VezriWorking";
-import { POSE_FOR } from "@/lib/vezri-poses";
-import { goalLabel, goalStatement } from "@/lib/goal-label";
-import { isPlanView, milestoneProgress, planForView, type PlanView } from "@/lib/plan/views";
-import { APP_ROUTES, goalReviewPath } from "@/lib/routes";
-import { formatDayKey } from "@/lib/time";
-import { toDayKey } from "@/lib/time-zone";
-import { loadUserSettings } from "@/lib/user-settings";
-import MilestoneDate from "@/components/plan/MilestoneDate";
+import Icon from "@/components/icons/Icon";
+import GoalHeader from "@/components/goal/GoalHeader";
+import GoalTabs from "@/components/goal/GoalTabs";
+import GoalLayout from "@/components/goal/GoalLayout";
+import GoalTaskList, { type GoalTaskView } from "@/components/goal/GoalTaskList";
+import CompletedTaskList, { type CompletedTaskView } from "@/components/goal/CompletedTaskList";
+import NextMilestoneCard from "@/components/goal/NextMilestoneCard";
+import GoalOverview from "@/components/goal/GoalOverview";
+import ScopedPlan from "@/components/goal/ScopedPlan";
+import FullPlan, { type PlanMilestoneRow, type PlanTaskRow } from "@/components/goal/FullPlan";
 import PastPlanNotice from "@/components/plan/PastPlanNotice";
+import { goalLabel, goalStatement, goalSummary } from "@/lib/goal-label";
+import { DEFAULT_GOAL_TAB, isGoalTab, windowFor, type GoalTab } from "@/lib/plan/goal-tabs";
+import { selectGoalToday, summarizeToday, VISIBLE_TASKS } from "@/lib/plan/goal-today";
 import { describePastPlan, inspectPlanDates } from "@/lib/plan/reshape";
-import { dayKeyIn } from "@/lib/time-zone";
-
-// Milestone targets, deadlines and start-by dates are calendar days. They are
-// formatted zone-free on purpose: shifting a day into a timezone prints the
-// day before for every reader west of Greenwich.
-const shortDate = (value: string | null) => formatDayKey(value) || null;
+import { milestoneProgress, planForView } from "@/lib/plan/views";
+import { goalReviewPath } from "@/lib/routes";
+import { formatDayKey } from "@/lib/time";
+import { dayKeyIn, toDayKey } from "@/lib/time-zone";
+import { loadUserSettings } from "@/lib/user-settings";
 
 export const metadata: Metadata = { title: "Goal", robots: { index: false } };
 
+/** Work that still wants doing. The same set the rest of the planner uses. */
+const OPEN = new Set(["not_started", "in_progress", "unconfirmed", "partial"]);
 
-/** PRD §18 — the goal dashboard. */
+/**
+ * PRD §18 — one goal, in five views.
+ *
+ * The page answers "what does this goal need from me today?" first, because
+ * that is the question every link into it is asking. Overview steps back,
+ * Week and Month look forward, and Full Plan is the ONE place the whole
+ * milestone list is rendered — the page used to repeat all of it under a view
+ * already scoped to a single day, which put thirty-four rows between the user
+ * and three tasks.
+ *
+ * Each view is a real URL (?view=…), so it survives a reload and can be
+ * shared, and the switcher stays links with aria-current rather than a tablist.
+ *
+ * On a narrow screen the sidebar comes FIRST: goal health is the context for
+ * the day's work, and reading "at risk, dependencies are slipping" after
+ * scrolling past the tasks is reading it too late.
+ */
 export default async function GoalDashboardPage({
   params,
   searchParams,
@@ -39,7 +57,7 @@ export default async function GoalDashboardPage({
 }) {
   const { id } = await params;
   const { view: requested } = await searchParams;
-  const view: PlanView = isPlanView(requested) ? requested : "today";
+  const tab: GoalTab = isGoalTab(requested) ? requested : DEFAULT_GOAL_TAB;
   const supabase = await createClient();
 
   const { timeZone } = await loadUserSettings(supabase);
@@ -51,7 +69,7 @@ export default async function GoalDashboardPage({
     redirect(goalReviewPath(id));
   }
 
-  const [{ data: milestones }, { data: tasks }, { data: lastAudit }, { data: documents }] =
+  const [{ data: milestones }, { data: tasks }, { data: lastAudit }, { data: documents }, { data: dependencies }] =
     await Promise.all([
       supabase
         .from("milestones")
@@ -61,10 +79,9 @@ export default async function GoalDashboardPage({
       supabase
         .from("tasks")
         .select(
-          "id, title, rationale, status, priority, deadline, start_by, estimated_minutes, milestone_id, origin, confidence",
+          "id, title, rationale, task_type, status, priority, deadline, start_by, estimated_minutes, completed_at, milestone_id, origin, confidence",
         )
         .eq("goal_id", id)
-        .in("status", ["not_started", "in_progress", "unconfirmed", "partial", "done"])
         .order("priority", { ascending: true }),
       supabase
         .from("goal_audits")
@@ -78,13 +95,38 @@ export default async function GoalDashboardPage({
         .select("id, filename, source_kind")
         .eq("goal_id", id)
         .order("created_at", { ascending: true }),
+      // Who a task waits on. The name lives here, not on the task (§3, §13).
+      supabase
+        .from("task_dependencies")
+        .select("task_id, external_party_name, tasks!inner(goal_id)")
+        .eq("tasks.goal_id", id)
+        .eq("dependency_type", "external_person")
+        .is("resolved_at", null),
     ]);
 
-  // §14 — named once, at the top, instead of "should already have started" on
-  // every card below.
+  const milestoneRows = milestones ?? [];
+  const taskRows = tasks ?? [];
+
+  const waitingOnName = new Map<string, string>();
+  for (const dependency of dependencies ?? []) {
+    if (dependency.external_party_name) {
+      waitingOnName.set(dependency.task_id, dependency.external_party_name);
+    }
+  }
+
+  const milestoneTitle = new Map(milestoneRows.map((m) => [m.id, m.title]));
+  // Days, as days. A deadline is a calendar date and is never shifted into a
+  // timezone; only "which day is it right now" needs the user's zone.
+  const today = dayKeyIn(new Date(), timeZone);
+
+  const label = goalLabel(snapshot.goal);
+  const doneMilestones = milestoneRows.filter((m) => m.status === "done").length;
+
+  // §14 — said once, at the top, rather than "should already have started" on
+  // every row underneath it.
   const pastPlan = inspectPlanDates({
-    today: dayKeyIn(new Date(), timeZone),
-    items: (milestones ?? []).map((m) => ({
+    today,
+    items: milestoneRows.map((m) => ({
       id: m.id,
       title: m.title,
       date: m.target_date,
@@ -92,61 +134,122 @@ export default async function GoalDashboardPage({
     })),
   });
 
-  const label = goalLabel(snapshot.goal);
-  const statement = goalStatement(snapshot.goal);
-  const done = (milestones ?? []).filter((m) => m.status === "done").length;
+  // ---- Today -------------------------------------------------------------
+  const { tasks: todayTasks, counts } = selectGoalToday(
+    taskRows.map((task) => ({
+      id: task.id,
+      title: task.title,
+      rationale: task.rationale,
+      taskType: task.task_type,
+      status: task.status,
+      priority: task.priority,
+      deadline: task.deadline,
+      startBy: task.start_by,
+      estimatedMinutes: task.estimated_minutes,
+      milestoneTitle: task.milestone_id ? (milestoneTitle.get(task.milestone_id) ?? null) : null,
+      waitingOn: waitingOnName.get(task.id) ?? null,
+    })),
+    today,
+  );
 
-  // Today / Week / Month, rolled up from the milestone dates and task dates
-  // that already exist. No schedule table, nothing new to keep in sync.
-  const planMilestones = (milestones ?? []).map((m) => ({
-    id: m.id,
-    title: m.title,
-    status: m.status,
-    targetDate: m.target_date ? new Date(m.target_date) : null,
+  const todayView: GoalTaskView[] = todayTasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    reason: task.reason,
+    urgencyKind: task.urgency.kind,
+    urgencyLabel: task.urgency.label,
+    dateLabel: task.urgency.dateLabel,
+    estimatedMinutes: task.estimatedMinutes,
+    milestoneTitle: task.milestoneTitle,
+    waitingOn: task.waitingOn,
+    reminderId: snapshot.reminderFor.get(task.id) ?? null,
   }));
-  const planTasks = (tasks ?? []).map((t) => ({
-    id: t.id,
-    title: t.title,
-    rationale: t.rationale,
-    status: t.status,
-    milestoneId: t.milestone_id ?? null,
-    startBy: t.start_by ? new Date(t.start_by) : null,
-    deadline: t.deadline ? new Date(t.deadline) : null,
-    estimatedMinutes: t.estimated_minutes ?? null,
-    // §7 — where each item came from stays visible wherever the item is.
-    origin: t.origin as "explicit" | "inferred",
-    confidence: Number(t.confidence),
+
+  const completed: CompletedTaskView[] = taskRows
+    .filter((task) => task.status === "done")
+    .sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""))
+    .map((task) => ({
+      id: task.id,
+      title: task.title,
+      reason: task.rationale?.trim() || "it was part of this plan",
+      completedOn: formatDayKey(toDayKey(task.completed_at)) || null,
+      estimatedMinutes: task.estimated_minutes,
+      milestoneTitle: task.milestone_id ? (milestoneTitle.get(task.milestone_id) ?? null) : null,
+      origin: (task.origin as "explicit" | "inferred") ?? "inferred",
+      confidence: Number(task.confidence ?? 0),
+    }));
+
+  // ---- The plan, for the views that show it ------------------------------
+  const planRow = (task: (typeof taskRows)[number]): PlanTaskRow => ({
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    startBy: toDayKey(task.start_by),
+    deadline: toDayKey(task.deadline),
+    estimatedMinutes: task.estimated_minutes,
+    origin: (task.origin as "explicit" | "inferred") ?? "inferred",
+    confidence: Number(task.confidence ?? 0),
+  });
+
+  const fullPlan: PlanMilestoneRow[] = milestoneRows.map((milestone) => ({
+    id: milestone.id,
+    title: milestone.title,
+    status: milestone.status,
+    targetDate: milestone.target_date,
+    dateAnchor: milestone.date_anchor ?? null,
+    tasks: taskRows.filter((task) => task.milestone_id === milestone.id).map(planRow),
   }));
-  const scoped = planForView(view, { milestones: planMilestones, tasks: planTasks, timeZone });
+  const looseTasks = taskRows.filter((task) => !task.milestone_id).map(planRow);
+
+  const window = windowFor(tab);
+  const scoped = window
+    ? planForView(window, {
+        milestones: milestoneRows.map((m) => ({
+          id: m.id,
+          title: m.title,
+          status: m.status,
+          targetDate: m.target_date ? new Date(m.target_date) : null,
+        })),
+        tasks: taskRows.map((task) => ({
+          id: task.id,
+          title: task.title,
+          rationale: task.rationale,
+          status: task.status,
+          milestoneId: task.milestone_id ?? null,
+          startBy: task.start_by ? new Date(task.start_by) : null,
+          deadline: task.deadline ? new Date(task.deadline) : null,
+          estimatedMinutes: task.estimated_minutes,
+          origin: (task.origin as "explicit" | "inferred") ?? "inferred",
+          confidence: Number(task.confidence ?? 0),
+        })),
+        timeZone,
+      })
+    : null;
+
+  // §15 — the next milestone: the earliest dated one still open, and an
+  // undated one only once the dated ones run out. A milestone with no date
+  // cannot be "next" while something with a real date is waiting.
+  const openMilestones = milestoneRows.filter((m) => m.status !== "done");
+  const nextMilestone =
+    openMilestones
+      .filter((m) => m.target_date)
+      .sort((a, b) => (a.target_date ?? "").localeCompare(b.target_date ?? ""))[0] ??
+    openMilestones[0] ??
+    null;
 
   return (
-    <div className="shell max-w-3xl py-12 lg:py-16">
-      <Link href={APP_ROUTES.today} className="text-sm font-medium text-berry hover:underline">
-        ← Today
-      </Link>
-
-      <div className="mt-4 flex items-start justify-between gap-6">
-        <div className="min-w-0">
-          {/* Short label as the heading. The statement is a paragraph, and a
-              paragraph makes a poor h1. */}
-          <h1 className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">{label}</h1>
-          {snapshot.goal.target_date && (
-            <p className="mt-2 text-mauve">By {shortDate(snapshot.goal.target_date)}</p>
-          )}
-        </div>
-        <VezriPoseImage
-          pose={POSE_FOR.goalHealth}
-          alt=""
-          className="h-16 w-auto shrink-0 sm:h-24"
-        />
-      </div>
-
-      {/* Collapsed by default. This is the ONE place the full statement can be
-          expanded — a task card cannot, because Today shows three cards and 60
-          words would push the other two off the screen. Here nothing is
-          displaced. */}
-      <Disclosure label="Show full target" className="mt-6">
-        <p className="text-[1.02rem] leading-relaxed text-ink">{statement}</p>
+    <div className="shell max-w-6xl py-8 lg:py-12">
+      <GoalHeader
+        label={label}
+        summary={goalSummary(snapshot.goal)}
+        targetDate={snapshot.goal.target_date}
+        achieved={snapshot.goal.status === "achieved"}
+      >
+        {/* Collapsed by default, and the ONE place the full statement can be
+          opened. §6 requires the approved wording be preserved; a heading
+          requires six words. Both are true here, one tap apart. */}
+        <Disclosure label="Show full target" className="mt-5">
+        <p className="text-[1.02rem] leading-relaxed text-ink">{goalStatement(snapshot.goal)}</p>
         {snapshot.goal.success_criteria.length > 0 && (
           <>
             <h4 className="mt-4 text-sm font-semibold text-ink">How success is measured</h4>
@@ -157,136 +260,141 @@ export default async function GoalDashboardPage({
             </ul>
           </>
         )}
-      </Disclosure>
+        </Disclosure>
+      </GoalHeader>
 
       {pastPlan.isBehind && snapshot.goal.target_date && (
         <PastPlanNotice goalId={id} summary={describePastPlan(pastPlan)} />
       )}
 
-      <PlanViewTabs goalId={id} current={view} />
+      <GoalTabs goalId={id} current={tab} />
 
-      <section aria-label={`Plan for the ${view}`} className="mt-6 space-y-3">
-        {scoped.milestones.length === 0 && scoped.tasks.length === 0 ? (
-          <p className="rounded-2xl border border-blush bg-white p-6 text-mauve shadow-soft">
-            {view === "today"
-              ? "Nothing scheduled for today on this goal."
-              : `Nothing falls in this ${view} yet.`}
-          </p>
-        ) : (
+      {/* Two cards beside the work, and only two: how the goal is doing, and
+        what is next. A third would be something to read instead of doing
+        the thing the page is for. */}
+      <GoalLayout
+        sidebar={
           <>
-            {scoped.milestones.map((milestone) => {
-              const progress = milestoneProgress(milestone, planTasks);
-              return (
-                <div
-                  key={milestone.id}
-                  className="rounded-2xl border border-blush bg-white p-5 shadow-soft"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="font-semibold text-ink">{milestone.title}</h3>
-                    <span className="text-sm text-mauve-light">
-                      {shortDate(toDayKey(milestone.targetDate)) ?? "No date yet"}
-                    </span>
-                  </div>
-                  {progress.total > 0 && (
-                    <p className="mt-1 text-sm text-mauve">
-                      {progress.done} of {progress.total} tasks done
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-
-            {scoped.tasks.filter((t) => t.status !== "done").length > 0 && (
-              <ul className="space-y-2">
-                {scoped.tasks
-                  .filter((t) => t.status !== "done")
-                  .slice(0, 12)
-                  .map((task) => (
-                    <li
-                      key={task.id}
-                      className="rounded-xl border border-blush bg-white px-5 py-4 shadow-soft"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <p className="font-medium text-ink">{task.title}</p>
-                        <ProvenanceBadge origin={task.origin ?? "inferred"} confidence={task.confidence ?? 0} />
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-x-4 text-sm text-mauve-light">
-                        {task.estimatedMinutes && <span>~{task.estimatedMinutes} min</span>}
-                        {task.startBy && <span>Start by {shortDate(toDayKey(task.startBy))}</span>}
-                        {task.deadline && <span>Due {shortDate(toDayKey(task.deadline))}</span>}
-                      </div>
-                    </li>
-                  ))}
-              </ul>
-            )}
+            <HealthCard
+              title="Goal Health"
+              score={snapshot.health.score}
+              status={snapshot.health.status}
+              factors={snapshot.health.factors}
+              weakest={snapshot.health.weakest}
+              recommendation={lastAudit?.explanation ?? null}
+            />
+            <NextMilestoneCard
+              goalId={id}
+              milestone={
+                nextMilestone
+                  ? {
+                      id: nextMilestone.id,
+                      title: nextMilestone.title,
+                      targetDate: nextMilestone.target_date,
+                      dateAnchor: nextMilestone.date_anchor ?? null,
+                  }
+                : null
+            }
+            done={doneMilestones}
+            total={milestoneRows.length}
+          />
+        </>
+        }
+      >
+        {tab === "today" && (
+          <>
+            <GoalTaskList
+              tasks={todayView}
+              summary={summarizeToday(counts)}
+              visibleCount={VISIBLE_TASKS}
+            />
+            <CompletedTaskList tasks={completed} />
           </>
         )}
-      </section>
 
-      <div className="mt-8 space-y-6">
-        <HealthCard
-          title="Goal Health"
-          status={snapshot.health.status}
-          factors={snapshot.health.factors}
-          recommendation={lastAudit?.explanation ?? null}
-        />
+        {tab === "overview" && (
+          <GoalOverview
+            goalId={id}
+            done={doneMilestones}
+            total={milestoneRows.length}
+            criticalDates={milestoneRows
+              .filter((m) => m.status !== "done" && m.target_date)
+              .sort((a, b) => (a.target_date ?? "").localeCompare(b.target_date ?? ""))
+              .slice(0, 3)
+              .map((m) => ({ id: m.id, title: m.title, targetDate: m.target_date as string }))}
+            waitingOn={taskRows
+              .filter((task) => OPEN.has(task.status) && waitingOnName.has(task.id))
+              .map((task) => ({
+                id: task.id,
+                title: task.title,
+                person: waitingOnName.get(task.id) ?? null,
+              }))}
+          />
+        )}
 
-        <AuditPanel goalId={id} />
+        {window && scoped && (
+          <ScopedPlan
+            window={window}
+            milestones={scoped.milestones.map((milestone) => {
+              const progress = milestoneProgress(milestone, scoped.tasks);
+              return {
+                id: milestone.id,
+                title: milestone.title,
+                targetDate: toDayKey(milestone.targetDate),
+                done: progress.done,
+                total: progress.total,
+              };
+            })}
+            tasks={scoped.tasks
+              .filter((task) => task.status !== "done")
+              .map((task) => ({
+                id: task.id,
+                title: task.title,
+                status: task.status,
+                startBy: toDayKey(task.startBy),
+                deadline: toDayKey(task.deadline),
+                estimatedMinutes: task.estimatedMinutes,
+                origin: task.origin ?? "inferred",
+                confidence: task.confidence ?? 0,
+              }))}
+          />
+        )}
 
+        {tab === "plan" && <FullPlan milestones={fullPlan} looseTasks={looseTasks} />}
+      </GoalLayout>
 
-        {(milestones ?? []).length > 0 && (
-          <section
-            aria-labelledby="progress-heading"
-            className="rounded-2xl border border-blush bg-white p-6 shadow-soft"
+      {/* Provenance, at the foot of the page. Useful — it is where every item
+          above came from — but it is not a decision anyone makes daily, so it
+          does not earn a slot beside the day's work. */}
+      {(documents ?? []).length > 0 && (
+        <section
+          aria-labelledby="source-heading"
+          className="mt-8 rounded-3xl border border-blush bg-white p-5 shadow-soft sm:p-6"
+        >
+          <h2
+            id="source-heading"
+            className="flex items-center gap-2 text-lg font-semibold text-ink"
           >
-            <h2 id="progress-heading" className="text-lg font-semibold text-ink">
-              Progress
-            </h2>
-            <p className="mt-1 text-sm text-mauve">
-              {done} of {(milestones ?? []).length} milestones complete
-            </p>
-            <ul className="mt-4 space-y-2.5">
-              {(milestones ?? []).map((milestone) => (
-                <li key={milestone.id} className="flex flex-wrap items-center justify-between gap-3">
-                  <span
-                    className={
-                      milestone.status === "done" ? "text-mauve-light line-through" : "text-ink"
-                    }
-                  >
-                    {milestone.title}
-                  </span>
-                  <MilestoneDate
-                    milestoneId={milestone.id}
-                    date={milestone.target_date}
-                    label={shortDate(milestone.target_date)}
-                    dateAnchor={milestone.date_anchor ?? null}
-                  />
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {(documents ?? []).length > 0 && (
-          <section className="rounded-2xl border border-blush bg-white p-6 shadow-soft">
-            <h2 className="text-lg font-semibold text-ink">Where this came from</h2>
-            <ul className="mt-3 space-y-1 text-mauve">
-              {(documents ?? []).map((document) => (
-                <li key={document.id}>
-                  {document.filename}
-                  {document.source_kind === "paste" ? " (pasted)" : ""}
-                </li>
-              ))}
-            </ul>
-            <Link
-              href={goalReviewPath(id)}
-              className="mt-4 inline-block text-sm font-medium text-berry hover:underline"
-            >
-              Review the extracted plan
-            </Link>
-          </section>
-        )}
-      </div>
+            <Icon name="document" className="h-5 w-5 text-mauve-light" />
+            Where this came from
+          </h2>
+          <ul className="mt-3 space-y-1 text-mauve">
+            {(documents ?? []).map((document) => (
+              <li key={document.id}>
+                {document.filename}
+                {document.source_kind === "paste" ? " (pasted)" : ""}
+              </li>
+            ))}
+          </ul>
+          <Link
+            href={goalReviewPath(id)}
+            className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-berry hover:underline"
+          >
+            Review the extracted plan
+            <Icon name="chevronRight" className="h-4 w-4" />
+          </Link>
+        </section>
+      )}
     </div>
   );
 }

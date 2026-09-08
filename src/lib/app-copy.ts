@@ -127,5 +127,24 @@ export const HEALTH_LABELS = {
   achieved: "Achieved",
 } as const;
 
+/**
+ * PRD §4.6 — the line beside Vezri on a goal page.
+ *
+ * Encouraging, and deliberately about the work rather than about the person's
+ * record: "you've got this" beside a screen of overdue tasks reads as a
+ * cheerful bystander. It says nothing about how far behind anything is,
+ * because that is the count line's job and it only needs saying once.
+ */
+export const GOAL_ENCOURAGEMENT = "Big goals move in small steps. Today only needs one.";
+
+/** PRD §17 — the goal page's Today list. */
+export const GOAL_TODAY_HEADING = "Today's Tasks";
+export const GOAL_TODAY_SUBTEXT = "Only what this goal needs from you today.";
+export const GOAL_TODAY_EMPTY = "Nothing on this goal needs you today.";
+
+/** The completed history, below the day's work. */
+export const GOAL_COMPLETED_HEADING = "Completed Tasks";
+export const GOAL_COMPLETED_SUBTEXT = "Everything you have finished on this goal.";
+
 /** PRD §16 — the audit button label, verbatim. */
 export const AUDIT_LABEL = "What am I missing?";

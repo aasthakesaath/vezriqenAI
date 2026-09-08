@@ -93,8 +93,11 @@ const OPEN_STATUSES = new Set(["not_started", "in_progress", "unconfirmed", "par
  * task's own rationale is the best answer because the model wrote it about
  * THIS task; the type lines are the fallback, and each one describes the work
  * rather than the person.
+ *
+ * Exported because the goal page's Today list needs the same sentence for the
+ * same reason. One wording, one place to change it.
  */
-function neutralReason(task: CandidateTask): string {
+export function neutralReason(task: { rationale: string | null; taskType: string }): string {
   if (task.rationale?.trim()) return task.rationale.trim();
   switch (task.taskType) {
     case "external_dependency":

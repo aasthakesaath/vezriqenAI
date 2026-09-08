@@ -25,6 +25,14 @@ export type GoalSnapshot = {
   gaps: Gap[];
   topGaps: Gap[];
   healthInputs: HealthInputs;
+  /**
+   * task_id -> reminder_id for checkpoints that came due and were never
+   * answered. The rows are already loaded for the health calculation, so the
+   * goal page gets the map for free rather than asking the database the same
+   * question a second time — and a check-in that carries the reminder id
+   * closes the loop, which is what stops it counting against health forever.
+   */
+  reminderFor: Map<string, string>;
 };
 
 function toDate(value: string | null): Date | null {
@@ -85,6 +93,9 @@ export async function loadGoalSnapshot(options: {
   type TaskJoin = { goal_id: string; title: string; priority?: number; start_by?: string | null };
   const joined = <T>(value: T | T[] | null): T | null =>
     Array.isArray(value) ? (value[0] ?? null) : value;
+
+  const reminderFor = new Map<string, string>();
+  for (const row of reminders ?? []) reminderFor.set(row.task_id, row.id);
 
   const unansweredCheckpoints = (reminders ?? []).map((row) => {
     const task = joined(row.tasks as unknown as TaskJoin | TaskJoin[]);
@@ -184,5 +195,6 @@ export async function loadGoalSnapshot(options: {
     gaps,
     topGaps: selectTopGaps(gaps),
     healthInputs,
+    reminderFor,
   };
 }
