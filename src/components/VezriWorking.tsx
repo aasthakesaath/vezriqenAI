@@ -181,7 +181,11 @@ export default function VezriWorking({
           changes on its own. The global prefers-reduced-motion rule collapses
           every animation to 0.01ms, which leaves a still image and that text,
           so nothing here needs a second suppression rule. */}
-      <span className="animate-vezri-breathe">
+      {/* inline-block, not inline: `transform` does not apply to a
+          non-replaced inline box, so the breathing this span exists for never
+          ran, and a 144px replaced element in an inline box is also where
+          baseline gaps come from. */}
+      <span className="inline-block animate-vezri-breathe">
         <VezriPoseImage pose={pose} alt="" priority className="h-36 w-auto" />
       </span>
       <div className="space-y-1.5">

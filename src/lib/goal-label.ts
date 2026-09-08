@@ -17,30 +17,45 @@ export type GoalNaming = {
   user_goal_text?: string | null;
 };
 
-/** Words kept when a label has to be derived rather than read. */
-const FALLBACK_WORDS = 6;
+/**
+ * How long the user's own wording may be and still work as a name.
+ *
+ * Generous rather than tight: this is a fallback, and a 50-character line in a
+ * section header is untidy where a sliced sentence is wrong.
+ */
+const NAME_CHARS = 56;
 
 /**
- * The short name: for task cards, Today, the week view, nav and the goal
- * heading.
+ * The short name: for task cards, Today, the week view, nav and every goal
+ * heading. The ONE helper every rendered goal name goes through.
  *
- * Falls back to the first few words of the statement rather than the whole
- * thing, because goals extracted before short_label existed still have to fit
- * on a card — the bug this replaces was exactly a 60-word statement rendered
- * where a name belonged.
+ * It will not slice the SMART statement, and that is the whole point of this
+ * function. The statement is ~60 words the user approved as a paragraph; the
+ * first six of them are not a name, they are the opening of a sentence. This
+ * shipped twice as "By Dec 31, 2026, turn Caly…" — once as a goal-page
+ * heading, again as a Today section header — because a truncated statement
+ * looks close enough to a name to pass review, and CSS then cut it a second
+ * time mid-word.
+ *
+ * So the ladder is: the six-word label extraction wrote, then the user's own
+ * words if they are short enough to be a name, then nothing. "Your goal" is a
+ * worse label than a real one and a better one than a sentence fragment — and
+ * a goal reaching it is a data problem (no short_label, no short user text),
+ * visible as such, rather than a rendering problem disguised as a name.
  */
 export function goalLabel(goal: GoalNaming | null | undefined): string {
-  if (!goal) return "Your goal";
-
-  const label = goal.short_label?.trim();
+  const label = goal?.short_label?.trim();
   if (label) return label;
 
-  const source = goal.normalized_goal?.trim() || goal.user_goal_text?.trim();
-  if (!source) return "Your goal";
+  // The user's own phrasing, never the generated statement. Someone who typed
+  // "Run a half marathon" gets that back; someone whose only text is a
+  // paragraph gets the neutral name rather than the paragraph's first clause.
+  const own = goal?.user_goal_text?.trim();
+  if (own && own.length <= NAME_CHARS && !/[.!?]\s/.test(own)) {
+    return own.replace(/[.,;:]$/, "");
+  }
 
-  const words = source.split(/\s+/);
-  if (words.length <= FALLBACK_WORDS) return source.replace(/[.,;:]$/, "");
-  return `${words.slice(0, FALLBACK_WORDS).join(" ").replace(/[.,;:]$/, "")}…`;
+  return "Your goal";
 }
 
 /** How long a one-line description may run before it is cut at a word. */

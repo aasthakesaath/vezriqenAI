@@ -68,10 +68,10 @@ export default async function TodayPage() {
     })),
     today,
   ).map((section) => {
-    const goal = naming.get(section.goalId) ?? {
-      short_label: section.goalLabel,
-      normalized_goal: section.goalTitle,
-    };
+    // goalLabel no longer consults normalized_goal, so the fallback carries
+    // only the name columns. Passing the statement here would imply it is
+    // still a source for a name, which is exactly the bug being closed.
+    const goal = naming.get(section.goalId) ?? { short_label: section.goalLabel };
     return {
       goalId: section.goalId,
       goalLabel: goalLabel(goal),
@@ -106,7 +106,7 @@ export default async function TodayPage() {
         id: task.id,
         title: task.title,
         waitingOn: task.externalPartyName ?? null,
-        goalLabel: goalLabel({ short_label: task.goalLabel, normalized_goal: task.goalTitle }),
+        goalLabel: goalLabel({ short_label: task.goalLabel }),
       }))}
     />
   );

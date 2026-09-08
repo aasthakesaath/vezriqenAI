@@ -153,7 +153,13 @@ export default function TodayGoalSections({ sections }: { sections: TodaySection
         return (
           <section
             key={section.goalId}
-            className="overflow-hidden rounded-2xl border border-blush bg-white shadow-soft"
+            /* No overflow-hidden. It was here to clip children to the rounded
+               corners, and it is also the one ancestor able to clamp the
+               Execution Block Coach — the panel that opens INSIDE this box and
+               is taller than everything else on the screen. Corner rounding is
+               worth a class on the header button; it is not worth a clip that
+               can silently swallow §13's core interaction. */
+            className="rounded-2xl border border-blush bg-white shadow-soft"
           >
             {/* A real <button> in a heading: the USWDS accordion pattern the
                 rest of the product already follows (see Disclosure.tsx). */}
@@ -163,14 +169,30 @@ export default function TodayGoalSections({ sections }: { sections: TodaySection
                 aria-expanded={open}
                 aria-controls={panelId}
                 onClick={() => toggle(section.goalId, index)}
-                className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-blush-wash sm:px-5"
+                className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-blush-wash sm:px-5 ${
+                  open ? "rounded-t-2xl" : "rounded-2xl"
+                }`}
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blush-light text-berry">
                   <Icon name={section.icon} />
                 </span>
 
-                <span className="min-w-0 flex-1 truncate text-[1.05rem] font-semibold text-ink">
-                  {section.goalLabel}
+                <span className="min-w-0 flex-1">
+                  {/* Wraps rather than truncating. A name that has to be cut
+                      to fit is a name that should not have been this long —
+                      goalLabel guarantees a short one — and CSS truncation is
+                      how "By Dec 31, 2026, turn Caly…" reached the screen. */}
+                  <span className="block text-[1.05rem] font-semibold leading-snug text-ink">
+                    {section.goalLabel}
+                  </span>
+                  {/* Below 640px the pill would squeeze the goal name to a few
+                      characters, so the count moves under it. INSIDE the
+                      button, not a sibling pulled up with a negative margin:
+                      that margin overlapped the header by 8px and is the third
+                      time this screen has shipped overlapping boxes. */}
+                  <span className="mt-0.5 block text-sm font-semibold text-berry sm:hidden">
+                    {section.summary}
+                  </span>
                 </span>
 
                 {/* On the header, so a closed section still says what is in it. */}
@@ -183,13 +205,6 @@ export default function TodayGoalSections({ sections }: { sections: TodaySection
                 </span>
               </button>
             </h3>
-
-            {/* The pill wraps to its own line rather than shrinking below
-                640px, where it would otherwise push the goal name to two
-                characters. */}
-            <p className="-mt-2 px-4 pb-3 text-sm font-semibold text-berry sm:hidden">
-              {section.summary}
-            </p>
 
             {/* `hidden` rather than unmounted: in-page find still reaches the
                 text, and a screen reader's cursor is not surprised by content
