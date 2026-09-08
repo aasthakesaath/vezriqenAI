@@ -5,6 +5,9 @@ import { useState } from "react";
 import ProvenanceBadge from "./ProvenanceBadge";
 import { APP_ROUTES } from "@/lib/routes";
 import { POSE_FOR, VezriPoseImage } from "@/components/VezriWorking";
+import { formatDay } from "@/lib/time";
+
+const shortDate = (value: string | null) => (value ? formatDay(value) : null);
 
 export type PlanMilestone = {
   id: string;
@@ -32,14 +35,6 @@ export type PlanTask = {
   external_party: string | null;
 };
 
-function shortDate(value: string | null): string | null {
-  if (!value) return null;
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 /**
  * PRD §5 Step 6 — milestones, immediate priorities, major deadlines,

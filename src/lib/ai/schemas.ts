@@ -128,6 +128,14 @@ export type ExtractedTask = z.infer<typeof ExtractedTaskSchema>;
 export const SmartTargetSchema = z.object({
   user_wording: z.string().max(600),
   normalized_goal: z.string().min(1).max(400),
+  /**
+   * A six-word label for cards, nav and headings.
+   *
+   * Cosmetic only. normalized_goal stays the record of what the goal is, and
+   * the plan-approval screen renders THAT in full — §7 does not allow a
+   * shortened inference to stand in for the statement the user approves.
+   */
+  short_label: z.string().min(1).max(80),
   target_date: isoDate,
   success_measures: z.array(z.string().max(300)).min(1).max(5),
   constraints: z.array(z.string().max(300)).max(5),

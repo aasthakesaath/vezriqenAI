@@ -142,7 +142,7 @@ describe("the confused pose stays off paths where nothing went wrong", () => {
 
   it("never appears on a good empty state", () => {
     // "Nothing needs you today" is being caught up, not a problem.
-    const caughtUp = html(<TodayList cards={[]} />);
+    const caughtUp = html(<TodayList groups={[]} />);
     expect(usesPose(caughtUp, "confused")).toBe(false);
     expect(caughtUp).toContain("Nothing needs you today");
   });

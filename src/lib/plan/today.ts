@@ -1,3 +1,5 @@
+import { formatDay } from "@/lib/time";
+
 /**
  * Choosing what to show on Today (PRD §17, §4.5).
  *
@@ -9,7 +11,14 @@
 export type CandidateTask = {
   id: string;
   goalId: string;
+  /** The full SMART statement. Stored, never rendered on a card. */
   goalTitle: string;
+  /** Six-word cosmetic label. Null for goals extracted before it existed. */
+  goalLabel?: string | null;
+  /** The milestone this task belongs to — the context a card actually needs. */
+  milestoneTitle?: string | null;
+  /** Who the task is waiting on, when extraction flagged an external person. */
+  externalPartyName?: string | null;
   title: string;
   rationale: string | null;
   taskType: string;
@@ -26,6 +35,39 @@ export type CandidateTask = {
 
 export type TodayCard = CandidateTask & { urgencyScore: number; reason: string };
 
+/** Milestone heading plus the cards under it, for the grouped Today list. */
+export type TodayGroup = {
+  milestoneTitle: string | null;
+  goalId: string;
+  goalLabel: string | null;
+  cards: TodayCard[];
+};
+
+/**
+ * Groups the day's cards under the milestone each belongs to.
+ *
+ * Order is preserved: the cards are already in priority order and grouping
+ * must not reshuffle what the user is meant to do first.
+ */
+export function groupByMilestone(cards: TodayCard[]): TodayGroup[] {
+  const groups: TodayGroup[] = [];
+  for (const card of cards) {
+    const key = card.milestoneTitle ?? null;
+    const existing = groups.find((g) => g.milestoneTitle === key && g.goalId === card.goalId);
+    if (existing) {
+      existing.cards.push(card);
+      continue;
+    }
+    groups.push({
+      milestoneTitle: key,
+      goalId: card.goalId,
+      goalLabel: card.goalLabel ?? null,
+      cards: [card],
+    });
+  }
+  return groups;
+}
+
 const DAY = 24 * 60 * 60 * 1000;
 
 const OPEN_STATUSES = new Set(["not_started", "in_progress", "unconfirmed", "partial"]);
@@ -36,7 +78,42 @@ const OPEN_STATUSES = new Set(["not_started", "in_progress", "unconfirmed", "par
  * Deliberately not "most overdue first": how far a task has slipped matters,
  * but so does its priority and whether Vezri is missing information about it.
  */
-function score(task: CandidateTask, now: Date): { score: number; reason: string } {
+/**
+ * A line about the task, when the plan-level "you're behind" line has already
+ * been said at the top of the screen.
+ *
+ * §4 forbids guilt. Three cards each repeating "this should already have
+ * started" is not three facts, it is the same reproach three times — which is
+ * how a screen full of overdue work ends up reading as a telling-off. The
+ * task's own rationale is the best answer because the model wrote it about
+ * THIS task; the type lines are the fallback, and each one describes the work
+ * rather than the person.
+ */
+function neutralReason(task: CandidateTask): string {
+  if (task.rationale?.trim()) return task.rationale.trim();
+  switch (task.taskType) {
+    case "external_dependency":
+      return "someone else has to act before this can close";
+    case "submission":
+      return "it has a hard cut-off";
+    case "deep_work":
+      return "it needs a proper block of focus";
+    case "study_prep":
+      return "what comes next builds on it";
+    case "routine_habit":
+      return "it is small, and easy to pick back up";
+    case "approval_review":
+      return "it is waiting on a decision";
+    default:
+      return "it is the next thing that moves this forward";
+  }
+}
+
+function score(
+  task: CandidateTask,
+  now: Date,
+  planBehind: boolean,
+): { score: number; reason: string } {
   let value = (6 - task.priority) * 10;
   const reasons: string[] = [];
 
@@ -44,7 +121,9 @@ function score(task: CandidateTask, now: Date): { score: number; reason: string 
     const daysUntilStart = (task.startBy.getTime() - now.getTime()) / DAY;
     if (daysUntilStart < 0) {
       value += Math.min(40, 15 + Math.abs(daysUntilStart) * 2);
-      reasons.push("this should already have started");
+      // Said once at the top of the screen when the whole plan is behind, so
+      // the card says something about the work instead.
+      if (!planBehind) reasons.push("this should already have started");
     } else if (daysUntilStart <= 1) {
       value += 15;
       reasons.push("today is the day to start");
@@ -57,10 +136,10 @@ function score(task: CandidateTask, now: Date): { score: number; reason: string 
     const daysUntilDue = (task.deadline.getTime() - now.getTime()) / DAY;
     if (daysUntilDue < 0) {
       value += 25;
-      reasons.push("the deadline has passed");
+      reasons.push(`the deadline was ${formatDay(task.deadline)}`);
     } else if (daysUntilDue <= 3) {
       value += 20;
-      reasons.push("the deadline is close");
+      reasons.push(`it is due ${formatDay(task.deadline)}`);
     } else if (daysUntilDue <= 14) {
       value += 8;
     }
@@ -74,8 +153,26 @@ function score(task: CandidateTask, now: Date): { score: number; reason: string 
 
   return {
     score: value,
-    reason: reasons[0] ?? task.rationale ?? "this moves your goal forward",
+    reason: reasons[0] ?? neutralReason(task),
   };
+}
+
+/**
+ * How far behind the plan is, for the one line at the top of Today.
+ *
+ * Two or more tasks past their start date is a plan slipping, not a task
+ * slipping — and it is the case where repeating it per card turns into
+ * nagging.
+ */
+export function backlogSummary(
+  candidates: CandidateTask[],
+  options: { now?: Date } = {},
+): { behindCount: number; planBehind: boolean } {
+  const now = options.now ?? new Date();
+  const behindCount = candidates.filter(
+    (t) => OPEN_STATUSES.has(t.status) && t.startBy && t.startBy.getTime() < now.getTime(),
+  ).length;
+  return { behindCount, planBehind: behindCount >= 2 };
 }
 
 /**
@@ -101,9 +198,11 @@ export function selectTodayCards(
   const open = candidates.filter((t) => OPEN_STATUSES.has(t.status) && !t.blockedOnPerson);
   if (open.length === 0) return [];
 
+  const { planBehind } = backlogSummary(candidates, { now });
+
   const scored: TodayCard[] = open
     .map((task) => {
-      const { score: urgencyScore, reason } = score(task, now);
+      const { score: urgencyScore, reason } = score(task, now, planBehind);
       return { ...task, urgencyScore, reason };
     })
     .sort((a, b) => b.urgencyScore - a.urgencyScore);

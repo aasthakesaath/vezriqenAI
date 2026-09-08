@@ -424,6 +424,7 @@ export async function buildPlanForGoal(options: {
     .from("goals")
     .update({
       normalized_goal: smart.normalized_goal,
+      short_label: smart.short_label,
       target_date: smart.target_date,
       success_criteria: smart.success_measures,
       constraints: smart.constraints,

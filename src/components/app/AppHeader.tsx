@@ -9,7 +9,13 @@ import { APP_ROUTES } from "@/lib/routes";
  */
 export default function AppHeader({ name }: { name?: string | null }) {
   return (
-    <header className="sticky top-0 z-50 border-b border-blush/50 bg-white/90 backdrop-blur">
+    // Opaque, not bg-white/90 + backdrop-blur. A translucent sticky header
+    // lets the page show through it: on Settings the reminder pills ghosted
+    // behind the wordmark and every card was sheared off mid-line at the
+    // header's bottom edge, which reads as broken rendering rather than as a
+    // frosted effect. backdrop-blur goes with it — it does nothing behind an
+    // opaque surface except cost a compositing layer.
+    <header className="sticky top-0 z-50 border-b border-blush/60 bg-white">
       <div className="shell flex h-[4.5rem] items-center justify-between gap-4">
         <Link href={APP_ROUTES.today} className="flex items-center gap-2.5" aria-label={`${BRAND} home`}>
           <span className="relative block h-9 w-9 shrink-0 overflow-hidden rounded-full bg-blush-wash ring-1 ring-blush">

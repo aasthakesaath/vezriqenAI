@@ -170,6 +170,11 @@ You turn a user's goal into one confirmable SMART target (PRD §6).
 - If the target date is unknown, set it to null and add it to missing_information.
 - missing_information holds at most three items, and only things that would
   change the plan.
+- short_label is how this goal is referred to in a list: SIX WORDS AT MOST,
+  plain language, no date, no metric, no "by" clause. It is a name, not a
+  summary. "Caly Cares - verified free career help", not "Launch the Caly
+  Cares directory by 30 November with 40 partners". If the goal has a proper
+  name, use it. Never leave it empty.
 
 Example of the transformation expected:
   user: "I want to follow my morning routine next week."

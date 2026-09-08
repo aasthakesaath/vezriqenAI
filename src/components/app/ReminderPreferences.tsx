@@ -1,7 +1,76 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PROFILE_QUESTIONS } from "@/lib/app-copy";
+import {
+  HOUR_CHOICES,
+  MERIDIEMS,
+  browserTimeZone,
+  formatQuietHours,
+  joinHour,
+  splitHour,
+  type Meridiem,
+} from "@/lib/time";
+
+/**
+ * One bound of the quiet-hours window, picked the way a person says it.
+ *
+ * An hour and an AM/PM, not a number from 0 to 23. The old control asked
+ * someone to work out that "10 at night" is 22 and type it, which is a
+ * conversion the product should be doing, not the user.
+ */
+function HourPicker({
+  id,
+  label,
+  hour24,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hour24: number;
+  onChange: (next: number) => void;
+}) {
+  const { hour, meridiem } = splitHour(hour24);
+  const select =
+    "rounded-xl border border-blush bg-white px-3 py-2 text-sm text-ink focus:border-berry";
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <label htmlFor={id} className="text-sm text-mauve">
+        {label}
+      </label>
+      <select
+        id={id}
+        aria-label={`${label} hour`}
+        value={hour}
+        onChange={(e) => onChange(joinHour(Number(e.target.value), meridiem))}
+        className={select}
+      >
+        {/* Plain numerals, not "10:00": an option reading "10:00" beside an
+            AM/PM select is a clock time with no meridiem, which is the thing
+            this whole change exists to remove. The pair reads "10  PM"; the
+            sentence above spells the window out in full. */}
+        {HOUR_CHOICES.map((choice) => (
+          <option key={choice} value={choice}>
+            {choice}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label={`${label} AM or PM`}
+        value={meridiem}
+        onChange={(e) => onChange(joinHour(hour, e.target.value as Meridiem))}
+        className={select}
+      >
+        {MERIDIEMS.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
 
 /**
  * PRD §10 minimal onboarding, and §3's "user controls for reminder intensity
@@ -30,6 +99,13 @@ export default function ReminderPreferences({
   });
   const [quiet, setQuiet] = useState({ start: quietStart ?? 22, end: quietEnd ?? 7 });
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  /**
+   * Read after mount, not during render: the server has no visitor and would
+   * render its own zone, which then mismatches on hydration and — worse —
+   * would be wrong for everyone not sitting in the datacentre.
+   */
+  const [timeZone, setTimeZone] = useState<string | null>(null);
+  useEffect(() => setTimeZone(browserTimeZone()), []);
 
   async function save(next: Record<string, unknown>) {
     setStatus("saving");
@@ -84,33 +160,31 @@ export default function ReminderPreferences({
 
         <fieldset>
           <legend className="text-[0.95rem] font-semibold text-ink">Quiet hours</legend>
-          <p className="mt-1 text-sm text-mauve-light">Vezri won&rsquo;t email you between these.</p>
-          <div className="mt-2 flex items-center gap-3">
-            <label htmlFor="quiet-start" className="text-sm text-mauve">
-              From
-            </label>
-            <input
+          <p className="mt-1 text-sm text-mauve-light">
+            Vezri won&rsquo;t email you between{" "}
+            <span className="font-medium text-mauve">
+              {formatQuietHours(quiet.start, quiet.end, timeZone)}
+            </span>
+            .
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-3">
+            <HourPicker
               id="quiet-start"
-              type="number"
-              min={0}
-              max={23}
-              value={quiet.start}
-              onChange={(e) => setQuiet({ ...quiet, start: Number(e.target.value) })}
-              onBlur={() => save({ quiet_hours_start: quiet.start })}
-              className="w-20 rounded-xl border border-blush px-3 py-2 text-sm text-ink"
+              label="From"
+              hour24={quiet.start}
+              onChange={(start) => {
+                setQuiet({ ...quiet, start });
+                void save({ quiet_hours_start: start });
+              }}
             />
-            <label htmlFor="quiet-end" className="text-sm text-mauve">
-              to
-            </label>
-            <input
+            <HourPicker
               id="quiet-end"
-              type="number"
-              min={0}
-              max={23}
-              value={quiet.end}
-              onChange={(e) => setQuiet({ ...quiet, end: Number(e.target.value) })}
-              onBlur={() => save({ quiet_hours_end: quiet.end })}
-              className="w-20 rounded-xl border border-blush px-3 py-2 text-sm text-ink"
+              label="to"
+              hour24={quiet.end}
+              onChange={(end) => {
+                setQuiet({ ...quiet, end });
+                void save({ quiet_hours_end: end });
+              }}
             />
           </div>
         </fieldset>

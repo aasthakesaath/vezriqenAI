@@ -15,6 +15,8 @@ export const runtime = "nodejs";
 const PatchSchema = z
   .object({
     normalized_goal: z.string().min(1).max(400).optional(),
+    /** Cosmetic label. Editable wherever the goal is (UI spec §2). */
+    short_label: z.string().min(1).max(80).optional(),
     target_date: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -52,7 +54,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .from("goals")
     .update(parsed.data)
     .eq("id", id)
-    .select("id, normalized_goal, target_date, success_criteria, primary_flag, status")
+    .select("id, normalized_goal, short_label, target_date, success_criteria, primary_flag, status")
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

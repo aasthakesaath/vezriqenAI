@@ -1,4 +1,5 @@
 import { createEmailActionToken } from "@/lib/crypto/tokens";
+import { formatLongDay } from "@/lib/time";
 
 /**
  * Reminder emails (PRD §12).
@@ -24,9 +25,9 @@ export type ReminderEmailInput = {
   responseRequired: boolean;
 };
 
+/** Every user-visible time and date in the product goes through @/lib/time. */
 function formatDate(date: Date | null): string | null {
-  if (!date) return null;
-  return date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  return date ? formatLongDay(date) : null;
 }
 
 function actionLink(

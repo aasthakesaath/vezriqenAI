@@ -7,9 +7,26 @@ import { planReminders, type TaskType } from "./lead-time";
  * Materialises the reminder plan for an activated goal (PRD §12).
  *
  * Only ever called from the activate route, so §4.3 holds: Vezri does not
- * schedule anything the user has not confirmed. Reminders in the past are
- * skipped rather than fired retroactively — nobody wants six overdue
- * notifications the moment they press Start Goal.
+ * schedule anything the user has not confirmed.
+ *
+ * WHAT HAPPENS TO A PLAN THAT IS ALREADY BEHIND. This used to drop every
+ * reminder dated in the past, which sounds prudent and was in fact the reason
+ * the reminder centre was empty: a plan uploaded after its own start dates —
+ * the common case, since people bring Vezri a plan they are already behind on
+ * — produced reminders that were ALL in the past, so nothing was inserted at
+ * all. An empty screen is not restraint; it is the product silently declining
+ * to do its one job.
+ *
+ * So the two kinds are treated differently, which is what the original comment
+ * was reaching for:
+ *
+ *   heads-up      dropped when past. A nudge that work is about to begin is
+ *                 worthless once it has begun, and §12 calls it informational.
+ *   checkpoint    kept, and brought forward to now. This is the one that
+ *                 closes the loop and makes the Execution Block Coach
+ *                 reachable, and "did this happen?" is still a live question
+ *                 for work that slipped. It surfaces in the in-app centre as
+ *                 due, which is a list, not six pings.
  */
 export async function scheduleRemindersForGoal(options: {
   supabase: SupabaseClient;
@@ -46,7 +63,15 @@ export async function scheduleRemindersForGoal(options: {
     });
 
     for (const plan of plans) {
-      if (plan.scheduledAt.getTime() <= now) continue;
+      const isPast = plan.scheduledAt.getTime() <= now;
+
+      // A heads-up about work that has already started is noise.
+      if (isPast && plan.type === "heads_up") continue;
+
+      // A checkpoint that came due before the goal was started is still worth
+      // asking; it arrives as due rather than as a missed date.
+      const scheduledAt = isPast ? new Date(now) : plan.scheduledAt;
+
       rows.push({
         user_id: userId,
         task_id: task.id,
@@ -54,7 +79,7 @@ export async function scheduleRemindersForGoal(options: {
         // In-app always works; email is added alongside in Milestone 6 for
         // the important ones only (§12 forbids one email per low-value task).
         channel: "in_app",
-        scheduled_at: plan.scheduledAt.toISOString(),
+        scheduled_at: scheduledAt.toISOString(),
         response_required: plan.responseRequired,
         delivery_status: "pending",
       });

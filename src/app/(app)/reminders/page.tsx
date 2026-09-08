@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { APP_ROUTES } from "@/lib/routes";
+import { formatDayTime } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Reminders", robots: { index: false } };
 
@@ -59,10 +60,7 @@ export default async function RemindersPage() {
                   <p className="font-medium text-ink">{task?.title ?? "A task"}</p>
                   <p className="mt-0.5 text-sm text-mauve">
                     Asked{" "}
-                    {new Date(reminder.scheduled_at).toLocaleDateString("en-GB", {
-                      day: "numeric",
-                      month: "short",
-                    })}
+                    {formatDayTime(reminder.scheduled_at)}
                     {" · "}
                     {/* §12 — never assume completion from silence. */}
                     Unconfirmed

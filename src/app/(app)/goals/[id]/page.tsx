@@ -7,17 +7,12 @@ import HealthCard from "@/components/app/HealthCard";
 import AuditPanel from "@/components/app/AuditPanel";
 import ProvenanceBadge from "@/components/plan/ProvenanceBadge";
 import { APP_ROUTES, goalReviewPath } from "@/lib/routes";
+import { formatDay } from "@/lib/time";
+
+const shortDate = (value: string | null) => (value ? formatDay(value) : null);
 
 export const metadata: Metadata = { title: "Goal", robots: { index: false } };
 
-function shortDate(value: string | null): string | null {
-  if (!value) return null;
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 /** PRD §18 — the goal dashboard. */
 export default async function GoalDashboardPage({ params }: { params: Promise<{ id: string }> }) {
