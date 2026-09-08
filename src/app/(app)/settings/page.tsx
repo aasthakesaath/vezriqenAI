@@ -1,0 +1,59 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { createClient, getUser } from "@/lib/supabase/server";
+import CalendarConnection from "@/components/app/CalendarConnection";
+import ReminderPreferences from "@/components/app/ReminderPreferences";
+import { isCalendarConfigured } from "@/lib/calendar/google";
+import { APP_ROUTES } from "@/lib/routes";
+
+export const metadata: Metadata = { title: "Settings", robots: { index: false } };
+
+/** PRD §3 — user controls for reminder intensity and quiet hours, plus §11. */
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ calendar?: string }>;
+}) {
+  const { calendar } = await searchParams;
+  const user = await getUser();
+  const supabase = await createClient();
+
+  const [{ data: profile }, { data: connection }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("reminder_style, accountability_level, productive_window, quiet_hours_start, quiet_hours_end")
+      .eq("id", user!.id)
+      .maybeSingle(),
+    supabase
+      .from("calendar_connections")
+      .select("google_email, status")
+      .eq("user_id", user!.id)
+      .maybeSingle(),
+  ]);
+
+  return (
+    <div className="shell max-w-2xl py-12 lg:py-16">
+      <Link href={APP_ROUTES.today} className="text-sm font-medium text-berry hover:underline">
+        ← Today
+      </Link>
+      <h1 className="mt-4 text-3xl font-bold tracking-tight text-ink sm:text-4xl">Settings</h1>
+
+      <div className="mt-8 space-y-6">
+        <ReminderPreferences
+          reminderStyle={profile?.reminder_style ?? "both"}
+          accountability={profile?.accountability_level ?? "balanced"}
+          productiveWindow={profile?.productive_window ?? "varies"}
+          quietStart={profile?.quiet_hours_start ?? null}
+          quietEnd={profile?.quiet_hours_end ?? null}
+        />
+
+        <CalendarConnection
+          connected={connection?.status === "connected"}
+          googleEmail={connection?.google_email ?? null}
+          configured={isCalendarConfigured()}
+          notice={calendar ?? null}
+        />
+      </div>
+    </div>
+  );
+}
