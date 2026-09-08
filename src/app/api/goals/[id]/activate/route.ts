@@ -39,6 +39,29 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     );
   }
 
+  // A half-read plan must never start. Extraction is resumable now, so a run
+  // that stopped partway leaves real milestones and a real target behind — and
+  // without this check a plan missing most of its steps would schedule
+  // reminders and look finished.
+  const { data: document } = await supabase
+    .from("plan_documents")
+    .select("extraction_state, extraction_note")
+    .eq("goal_id", id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (document?.extraction_state === "failed_partial") {
+    return NextResponse.json(
+      {
+        error:
+          document.extraction_note ??
+          "Vezri didn't finish reading your plan. Try again before starting this goal.",
+      },
+      { status: 409 },
+    );
+  }
+
   const { error: updateError } = await supabase
     .from("goals")
     .update({ status: "active", activated_at: new Date().toISOString() })

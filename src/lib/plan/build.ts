@@ -3,11 +3,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAIProvider, AITruncationError, type AIProvider } from "@/lib/ai";
 import {
+  verifyProvenance,
   ExtractedPlanStructureSchema,
   ExtractedTaskBatchSchema,
   SmartTargetSchema,
-  verifyPlanProvenance,
   type ExtractedPlan,
+  type ExtractedPlanStructure,
   type ExtractedTask,
   type SmartTarget,
 } from "@/lib/ai/schemas";
@@ -20,6 +21,21 @@ import {
   tasksPrompt,
 } from "@/lib/ai/prompts";
 import { calculateStartBy, formatDate, type TaskType } from "./lead-time";
+import {
+  MAX_EXTRACTION_ATTEMPTS,
+  PASS_STRUCTURE,
+  PASS_TARGET,
+  describePartial,
+  isPassDone,
+  loadExtractionProgress,
+  markPassComplete,
+  setExtractionState,
+  taskPassKey,
+  totalUsage,
+  type ExtractionProgressRecord,
+} from "./extraction-state";
+import { AIExtractionError } from "@/lib/ai";
+import { ConfigurationError } from "@/lib/env";
 
 type Client = SupabaseClient;
 
@@ -254,141 +270,150 @@ export type BuildResult = {
  * at them, and every write goes through the caller's RLS-scoped client — the
  * service role is never used here, so a bug cannot cross a user boundary.
  */
-export async function buildPlanForGoal(options: {
+/* -------------------------------------------------------------------------
+ * Resumption helpers.
+ *
+ * A resumed run needs the structure pass's OUTPUT, not just its rows: the task
+ * prompts are built from the outcome and the milestone titles. Re-running the
+ * structure pass to recover them would defeat the point, so it is stored on the
+ * document's audit log and read back.
+ * ---------------------------------------------------------------------- */
+
+async function storeStructure(
+  supabase: Client,
+  progress: ExtractionProgressRecord,
+  structure: ExtractedPlanStructure,
+): Promise<void> {
+  if (!progress.documentId) return;
+  const { error } = await supabase
+    .from("plan_documents")
+    .update({ extracted_structure: structure })
+    .eq("id", progress.documentId);
+  // Not fatal: the milestone rows are already written, and loadStoredStructure
+  // rebuilds from them if this cache is missing. Logged rather than swallowed,
+  // so a resumed run that loses the model's wording says why.
+  if (error) console.warn(`[extract] could not cache the structure: ${error.message}`);
+}
+
+/**
+ * Rebuilds the structure a resumed run needs.
+ *
+ * From the milestone rows and the goal, not from the model — the whole point
+ * is that a completed pass is never paid for twice.
+ */
+async function loadStoredStructure(
+  supabase: Client,
+  goalId: string,
+  progress: ExtractionProgressRecord,
+): Promise<ExtractedPlanStructure> {
+  if (progress.documentId) {
+    const { data: cached } = await supabase
+      .from("plan_documents")
+      .select("extracted_structure")
+      .eq("id", progress.documentId)
+      .maybeSingle();
+    const stored = cached?.extracted_structure as ExtractedPlanStructure | null | undefined;
+    if (stored?.milestones) return stored;
+  }
+
+  const [{ data: goal }, { data: milestones }] = await Promise.all([
+    supabase
+      .from("goals")
+      .select("normalized_goal, user_goal_text, target_date, success_criteria, constraints")
+      .eq("id", goalId)
+      .single(),
+    supabase
+      .from("milestones")
+      .select("title, target_date, weight, status, origin, confidence")
+      .eq("goal_id", goalId)
+      .order("sort_order", { ascending: true }),
+  ]);
+
+  return {
+    outcome: goal?.normalized_goal ?? goal?.user_goal_text ?? "Your goal",
+    target_date: goal?.target_date ?? null,
+    success_measures: (goal?.success_criteria as string[]) ?? [],
+    constraints: (goal?.constraints as string[]) ?? [],
+    risks: [],
+    evidence_required: [],
+    milestones: (milestones ?? []).map((m) => ({
+      title: m.title,
+      target_date: m.target_date,
+      weight: m.weight,
+      already_complete: m.status === "done",
+      provenance: {
+        origin: m.origin as "explicit" | "inferred",
+        confidence: Number(m.confidence),
+        excerpt: null,
+        page_or_section: null,
+      },
+    })),
+    clarifying_questions: [],
+    reasoning: "Resumed from a partial extraction.",
+  };
+}
+
+/** The confirmed target, when the target pass already ran. */
+async function loadStoredTarget(supabase: Client, goalId: string): Promise<SmartTarget> {
+  const { data } = await supabase
+    .from("goals")
+    .select("normalized_goal, short_label, target_date, success_criteria, constraints, user_goal_text")
+    .eq("id", goalId)
+    .single();
+
+  return {
+    user_wording: data?.user_goal_text ?? "",
+    normalized_goal: data?.normalized_goal ?? "Your goal",
+    short_label: data?.short_label ?? "Your goal",
+    target_date: data?.target_date ?? null,
+    success_measures: (data?.success_criteria as string[]) ?? [],
+    constraints: (data?.constraints as string[]) ?? [],
+    feasibility_note: null,
+    missing_information: [],
+    reasoning: "Resumed from a partial extraction.",
+  };
+}
+
+/**
+ * How many milestones actually landed, for the partial message.
+ *
+ * Counted from the rows rather than from the model's output: the message tells
+ * someone what survived, and only the rows are evidence of that.
+ */
+async function countMilestones(supabase: Client, goalId: string): Promise<number> {
+  const { count } = await supabase
+    .from("milestones")
+    .select("id", { count: "exact", head: true })
+    .eq("goal_id", goalId);
+  return count ?? 0;
+}
+
+async function countTasks(supabase: Client, goalId: string): Promise<number> {
+  const { count } = await supabase
+    .from("tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("goal_id", goalId);
+  return count ?? 0;
+}
+
+/** Writes one batch of tasks, its dependencies, and its anchors. */
+async function writeTaskBatch(options: {
   supabase: Client;
   userId: string;
   goalId: string;
-  today?: string;
-  /** Reported as each pass completes, so the UI can show real progress. */
-  onProgress?: (event: ExtractionProgress) => void;
-}): Promise<BuildResult> {
-  const { supabase, userId, goalId } = options;
-  const today = options.today ?? formatDate(new Date());
+  tasks: ExtractedTask[];
+  milestoneIds: Map<string, string>;
+  anchorsFor: (
+    items: Array<{ provenance: { origin: string; excerpt: string | null } }>,
+  ) => Promise<Map<string, string>>;
+}): Promise<void> {
+  const { supabase, userId, goalId, tasks, milestoneIds, anchorsFor } = options;
+  if (tasks.length === 0) return;
 
-  const { data: goal, error: goalError } = await supabase
-    .from("goals")
-    .select("id, user_goal_text")
-    .eq("id", goalId)
-    .single();
-  if (goalError || !goal) throw new Error("That goal no longer exists.");
+  const anchors = await anchorsFor(tasks);
 
-  const { data: documents } = await supabase
-    .from("plan_documents")
-    .select("id, filename, mime_type, storage_path, extracted_text")
-    .eq("goal_id", goalId)
-    .order("created_at", { ascending: true });
-
-  const document = documents?.[0] ?? null;
-  const documentText = document?.extracted_text ?? null;
-
-  // An image plan has no text layer; the model reads the picture instead (§22).
-  let image: { data: string; mediaType: "image/jpeg" | "image/png" } | undefined;
-  if (!documentText && document?.storage_path && document.mime_type.startsWith("image/")) {
-    const { data: blob } = await supabase.storage
-      .from("plan-documents")
-      .download(document.storage_path);
-    if (blob) {
-      const buffer = Buffer.from(await blob.arrayBuffer());
-      image = {
-        data: buffer.toString("base64"),
-        mediaType: document.mime_type === "image/png" ? "image/png" : "image/jpeg",
-      };
-    }
-  }
-
-  const provider = getAIProvider();
-
-  const extraction = await extractPlanInPasses({
-    provider,
-    documentText,
-    userGoalText: goal.user_goal_text,
-    today,
-    image,
-    onProgress: options.onProgress,
-  });
-
-  // Never trust an origin="explicit" claim; check the quote is really there.
-  const plan = verifyPlanProvenance(extraction.plan, documentText);
-
-  options.onProgress?.({ phase: "target" });
-
-  const smartResult = await provider.generateStructured({
-    action: "smart_target",
-    system: SMART_SYSTEM,
-    prompt: smartPrompt({
-      outcome: plan.outcome,
-      userGoalText: goal.user_goal_text,
-      targetDate: plan.target_date,
-      successMeasures: plan.success_measures,
-      constraints: plan.constraints,
-      today,
-    }),
-    schema: SmartTargetSchema,
-    effort: "medium",
-  });
-  const smart = smartResult.data;
-
-  // ---- Replace any previous extraction for this goal -----------------------
-  // Re-running extraction should not duplicate the plan. Tasks cascade from
-  // milestones only for the milestone link, so both are cleared explicitly.
-  await supabase.from("tasks").delete().eq("goal_id", goalId);
-  await supabase.from("milestones").delete().eq("goal_id", goalId);
-
-  // ---- Anchors -------------------------------------------------------------
-  const excerpts = new Map<string, string>(); // excerpt -> anchor id
-  if (document) {
-    const unique = new Set<string>();
-    for (const item of [...plan.milestones, ...plan.tasks]) {
-      const excerpt = item.provenance.excerpt?.trim();
-      if (item.provenance.origin === "explicit" && excerpt) unique.add(excerpt);
-    }
-
-    if (unique.size > 0) {
-      const rows = [...unique].map((excerpt) => ({
-        user_id: userId,
-        document_id: document.id,
-        excerpt,
-        page_or_section: null,
-      }));
-      const { data: anchors } = await supabase
-        .from("plan_source_anchors")
-        .insert(rows)
-        .select("id, excerpt");
-      for (const anchor of anchors ?? []) excerpts.set(anchor.excerpt, anchor.id);
-    }
-  }
-
-  const anchorFor = (excerpt: string | null, origin: string): string | null =>
-    origin === "explicit" && excerpt ? (excerpts.get(excerpt.trim()) ?? null) : null;
-
-  // ---- Milestones ----------------------------------------------------------
-  const milestoneRows = plan.milestones.map((milestone, index) => ({
-    user_id: userId,
-    goal_id: goalId,
-    title: milestone.title,
-    target_date: milestone.target_date,
-    status: milestone.already_complete ? ("done" as const) : ("not_started" as const),
-    weight: milestone.weight,
-    source_anchor_id: anchorFor(milestone.provenance.excerpt, milestone.provenance.origin),
-    origin: milestone.provenance.origin,
-    confidence: milestone.provenance.confidence,
-    sort_order: index,
-  }));
-
-  const milestoneIds = new Map<string, string>(); // title -> id
-  if (milestoneRows.length > 0) {
-    const { data: inserted, error } = await supabase
-      .from("milestones")
-      .insert(milestoneRows)
-      .select("id, title");
-    if (error) throw new Error(`Couldn't save milestones: ${error.message}`);
-    for (const row of inserted ?? []) milestoneIds.set(row.title, row.id);
-  }
-
-  // ---- Tasks ---------------------------------------------------------------
-  const taskRows = plan.tasks.map((task) => {
+  const rows = tasks.map((task) => {
     const deadline = parseDate(task.deadline);
-    const priority = derivePriority(task);
     const { startBy, reason } = calculateStartBy({
       taskType: task.task_type as TaskType,
       deadline,
@@ -407,28 +432,26 @@ export async function buildPlanForGoal(options: {
       deadline: deadline?.toISOString() ?? null,
       start_by: startBy?.toISOString() ?? null,
       start_by_reason: reason,
-      priority,
+      priority: derivePriority(task),
       status: "not_started" as const,
       recurrence_rule: task.recurrence_rule,
-      source_anchor_id: anchorFor(task.provenance.excerpt, task.provenance.origin),
+      source_anchor_id:
+        task.provenance.origin === "explicit" && task.provenance.excerpt
+          ? (anchors.get(task.provenance.excerpt.trim()) ?? null)
+          : null,
+      // NOT NULL, per §7 — every stored item carries its provenance.
       origin: task.provenance.origin,
       confidence: task.provenance.confidence,
     };
   });
 
-  const taskIds = new Map<string, string>();
-  if (taskRows.length > 0) {
-    const { data: inserted, error } = await supabase
-      .from("tasks")
-      .insert(taskRows)
-      .select("id, title");
-    if (error) throw new Error(`Couldn't save tasks: ${error.message}`);
-    for (const row of inserted ?? []) taskIds.set(row.title, row.id);
-  }
+  const { data: inserted, error } = await supabase.from("tasks").insert(rows).select("id, title");
+  if (error) throw new Error(`Couldn't save tasks: ${error.message}`);
 
-  // ---- Dependencies --------------------------------------------------------
+  const taskIds = new Map((inserted ?? []).map((row) => [row.title, row.id]));
+
   const dependencyRows: Array<Record<string, unknown>> = [];
-  for (const task of plan.tasks) {
+  for (const task of tasks) {
     const taskId = taskIds.get(task.title);
     if (!taskId) continue;
 
@@ -457,55 +480,377 @@ export async function buildPlanForGoal(options: {
   if (dependencyRows.length > 0) {
     await supabase.from("task_dependencies").insert(dependencyRows);
   }
+}
+export async function buildPlanForGoal(options: {
+  supabase: Client;
+  userId: string;
+  goalId: string;
+  today?: string;
+  /** Reported as each pass completes, so the UI can show real progress. */
+  onProgress?: (event: ExtractionProgress) => void;
+}): Promise<BuildResult> {
+  const { supabase, userId, goalId } = options;
+  const today = options.today ?? formatDate(new Date());
+  const report = (event: ExtractionProgress) => options.onProgress?.(event);
 
-  // ---- Goal: SMART target, awaiting the user's confirmation ----------------
-  const { error: updateError } = await supabase
+  const { data: goal, error: goalError } = await supabase
     .from("goals")
-    .update({
-      normalized_goal: smart.normalized_goal,
-      short_label: smart.short_label,
-      target_date: smart.target_date,
-      success_criteria: smart.success_measures,
-      constraints: smart.constraints,
-      status: "awaiting_confirmation",
-    })
-    .eq("id", goalId);
-  if (updateError) throw new Error(`Couldn't save the target: ${updateError.message}`);
+    .select("id, user_goal_text")
+    .eq("id", goalId)
+    .single();
+  if (goalError || !goal) throw new Error("That goal no longer exists.");
 
-  // ---- Audit trail (§20, §23 "Why did Vezri suggest this?") ----------------
-  await supabase.from("ai_action_logs").insert([
-    {
-      user_id: userId,
-      goal_id: goalId,
-      action_type: "extract_plan",
-      structured_input: {
-        document_id: document?.id ?? null,
-        used_vision: Boolean(image),
-        extraction_passes: extraction.passes,
-      },
-      structured_output: plan,
-      explanation: plan.reasoning,
-      model_version: extraction.modelVersion,
-    },
-    {
-      user_id: userId,
-      goal_id: goalId,
-      action_type: "smart_target",
-      structured_input: { outcome: plan.outcome, target_date: plan.target_date },
-      structured_output: smart,
-      explanation: smart.reasoning,
-      model_version: smartResult.modelVersion,
-    },
-  ]);
+  const { data: documents } = await supabase
+    .from("plan_documents")
+    .select("id, filename, mime_type, storage_path, extracted_text")
+    .eq("goal_id", goalId)
+    .order("created_at", { ascending: true });
 
-  if (document) {
-    await supabase.from("plan_documents").update({ parse_status: "parsed" }).eq("id", document.id);
+  const document = documents?.[0] ?? null;
+  const documentText = document?.extracted_text ?? null;
+
+  // ---- Where did the last attempt get to? ---------------------------------
+  const progress = await loadExtractionProgress(supabase, goalId);
+
+  if (progress.attempts >= MAX_EXTRACTION_ATTEMPTS) {
+    // Retries are billable. Past the cap, another Try again would spend money
+    // on something that has failed six times, so it is not offered.
+    throw new AIExtractionError(
+      `Vezri has tried to read this plan ${progress.attempts} times without finishing. ` +
+        `Rather than keep retrying, upload the plan again — or paste the text instead, ` +
+        `which usually works when a file doesn't.`,
+    );
   }
 
-  return {
-    plan,
-    smart,
-    milestoneCount: milestoneRows.length,
-    taskCount: taskRows.length,
+  await setExtractionState({
+    supabase,
+    progress,
+    state: "in_progress",
+    note: null,
+    bumpAttempt: true,
+  });
+
+  // An image plan has no text layer; the model reads the picture instead (§22).
+  let image: { data: string; mediaType: "image/jpeg" | "image/png" } | undefined;
+  if (!documentText && document?.storage_path && document.mime_type.startsWith("image/")) {
+    const { data: blob } = await supabase.storage
+      .from("plan-documents")
+      .download(document.storage_path);
+    if (blob) {
+      const buffer = Buffer.from(await blob.arrayBuffer());
+      image = {
+        data: buffer.toString("base64"),
+        mediaType: document.mime_type === "image/png" ? "image/png" : "image/jpeg",
+      };
+    }
+  }
+
+  const provider = getAIProvider();
+  const promptInput = { documentText, userGoalText: goal.user_goal_text, today };
+  const withVisionNote = (prompt: string) =>
+    image ? `${prompt}\n\n${VISION_EXTRACTION_NOTE}` : prompt;
+
+  /** Anchors for the quotes in one batch of items (§7). */
+  const anchorsFor = async (
+    items: Array<{ provenance: { origin: string; excerpt: string | null } }>,
+  ): Promise<Map<string, string>> => {
+    const map = new Map<string, string>();
+    if (!document) return map;
+    const unique = new Set<string>();
+    for (const item of items) {
+      const excerpt = item.provenance.excerpt?.trim();
+      if (item.provenance.origin === "explicit" && excerpt) unique.add(excerpt);
+    }
+    if (unique.size === 0) return map;
+    const { data: anchors } = await supabase
+      .from("plan_source_anchors")
+      .insert(
+        [...unique].map((excerpt) => ({
+          user_id: userId,
+          document_id: document.id,
+          excerpt,
+          page_or_section: null,
+        })),
+      )
+      .select("id, excerpt");
+    for (const anchor of anchors ?? []) map.set(anchor.excerpt, anchor.id);
+    return map;
   };
+
+  let structure: ExtractedPlanStructure;
+  let modelVersion = "";
+  let milestoneIds = new Map<string, string>(); // title -> id
+
+  try {
+    // ===================================================================
+    // PASS 1 — structure. Goal-level fields and milestones.
+    // ===================================================================
+    if (!isPassDone(progress, PASS_STRUCTURE)) {
+      // A fresh run, so anything left by an earlier attempt goes. On a RESUME
+      // this branch is skipped entirely, which is the point — completed work
+      // is never deleted and never re-paid for.
+      await supabase.from("tasks").delete().eq("goal_id", goalId);
+      await supabase.from("milestones").delete().eq("goal_id", goalId);
+
+      report({ phase: "reading" });
+      const result = await provider.generateStructured({
+        action: "extract_plan_structure",
+        system: EXTRACTION_SYSTEM,
+        prompt: withVisionNote(structurePrompt(promptInput)),
+        schema: ExtractedPlanStructureSchema,
+        image,
+        effort: "high",
+      });
+      modelVersion = result.modelVersion;
+
+      // §7 — verified per item, as it lands. Partial is not unverified.
+      structure = {
+        ...result.data,
+        milestones: result.data.milestones.map((m) => ({
+          ...m,
+          provenance: verifyProvenance(m.provenance, documentText),
+        })),
+      };
+
+      const anchors = await anchorsFor(structure.milestones);
+      const rows = structure.milestones.map((milestone, index) => ({
+        user_id: userId,
+        goal_id: goalId,
+        title: milestone.title,
+        target_date: milestone.target_date,
+        status: milestone.already_complete ? ("done" as const) : ("not_started" as const),
+        weight: milestone.weight,
+        source_anchor_id:
+          milestone.provenance.origin === "explicit" && milestone.provenance.excerpt
+            ? (anchors.get(milestone.provenance.excerpt.trim()) ?? null)
+            : null,
+        // NOT NULL in the schema and never defaulted here: §7 requires every
+        // stored item to carry where it came from and how sure Vezri is.
+        origin: milestone.provenance.origin,
+        confidence: milestone.provenance.confidence,
+        sort_order: index,
+      }));
+
+      if (rows.length > 0) {
+        const { data: inserted, error } = await supabase
+          .from("milestones")
+          .insert(rows)
+          .select("id, title");
+        if (error) throw new Error(`Couldn't save milestones: ${error.message}`);
+        for (const row of inserted ?? []) milestoneIds.set(row.title, row.id);
+      }
+
+      // The goal's own fields, so a resumed run has them even if it never gets
+      // to the target pass. status stays draft: §6 requires a confirmed target
+      // before anything is scheduled.
+      await supabase
+        .from("goals")
+        .update({
+          success_criteria: structure.success_measures,
+          constraints: structure.constraints,
+        })
+        .eq("id", goalId);
+
+      await storeStructure(supabase, progress, structure);
+      await markPassComplete({
+        supabase,
+        progress,
+        key: PASS_STRUCTURE,
+        usage: result.usage,
+      });
+      report({ phase: "structure_done", milestones: structure.milestones.length });
+    } else {
+      // Resuming: the structure is already in the database.
+      structure = await loadStoredStructure(supabase, goalId, progress);
+      const { data: existing } = await supabase
+        .from("milestones")
+        .select("id, title")
+        .eq("goal_id", goalId);
+      milestoneIds = new Map((existing ?? []).map((m) => [m.title, m.id]));
+      report({ phase: "structure_done", milestones: structure.milestones.length });
+    }
+
+    // ===================================================================
+    // PASS 2..n — tasks, a few milestones at a time.
+    // ===================================================================
+    const titles = structure.milestones.map((m) => m.title);
+    const wholePlan = titles.length === 0;
+    const batches = wholePlan ? [[]] : chunk(titles, MILESTONES_PER_TASK_PASS);
+
+    let batchesDone = batches.filter((_, i) => isPassDone(progress, taskPassKey(i))).length;
+    report({ phase: "tasks", completed: batchesDone, total: batches.length });
+
+    // Sequential, unlike the old concurrent run: each batch writes before the
+    // next starts, so an interruption loses at most one batch. Concurrency
+    // saved wall-clock at the cost of losing everything in flight, which is
+    // the trade this whole change exists to reverse.
+    for (let i = 0; i < batches.length; i += 1) {
+      if (isPassDone(progress, taskPassKey(i))) continue;
+
+      const result = await provider.generateStructured({
+        action: `extract_plan_tasks_${i + 1}`,
+        system: EXTRACTION_SYSTEM,
+        prompt: withVisionNote(
+          tasksPrompt({
+            ...promptInput,
+            outcome: structure.outcome,
+            milestoneTitles: batches[i],
+            wholePlan,
+          }),
+        ),
+        schema: ExtractedTaskBatchSchema,
+        image,
+        effort: "high",
+      });
+      modelVersion = modelVersion || result.modelVersion;
+
+      const tasks = result.data.tasks.map((task) => ({
+        ...task,
+        provenance: verifyProvenance(task.provenance, documentText),
+      }));
+
+      await writeTaskBatch({
+        supabase,
+        userId,
+        goalId,
+        tasks,
+        milestoneIds,
+        anchorsFor,
+      });
+
+      await markPassComplete({
+        supabase,
+        progress,
+        key: taskPassKey(i),
+        usage: result.usage,
+      });
+      batchesDone += 1;
+      report({ phase: "tasks", completed: batchesDone, total: batches.length });
+    }
+    // The real number of task rows, resumed batches included — never a stand-in.
+    report({ phase: "tasks_done", tasks: await countTasks(supabase, goalId) });
+
+    // ===================================================================
+    // FINAL PASS — the SMART target.
+    // ===================================================================
+    let smart: SmartTarget;
+    if (!isPassDone(progress, PASS_TARGET)) {
+      report({ phase: "target" });
+      const smartResult = await provider.generateStructured({
+        action: "smart_target",
+        system: SMART_SYSTEM,
+        prompt: smartPrompt({
+          outcome: structure.outcome,
+          userGoalText: goal.user_goal_text,
+          targetDate: structure.target_date,
+          successMeasures: structure.success_measures,
+          constraints: structure.constraints,
+          today,
+        }),
+        schema: SmartTargetSchema,
+        effort: "medium",
+      });
+      smart = smartResult.data;
+      modelVersion = modelVersion || smartResult.modelVersion;
+
+      const { error: updateError } = await supabase
+        .from("goals")
+        .update({
+          normalized_goal: smart.normalized_goal,
+          short_label: smart.short_label,
+          target_date: smart.target_date,
+          success_criteria: smart.success_measures,
+          constraints: smart.constraints,
+          status: "awaiting_confirmation",
+        })
+        .eq("id", goalId);
+      if (updateError) throw new Error(`Couldn't save the target: ${updateError.message}`);
+
+      await markPassComplete({
+        supabase,
+        progress,
+        key: PASS_TARGET,
+        usage: smartResult.usage,
+      });
+    } else {
+      smart = await loadStoredTarget(supabase, goalId);
+    }
+
+    // ---- Audit trail (§20, §23 "Why did Vezri suggest this?") --------------
+    const spend = totalUsage(progress);
+    console.info(
+      `[extract] goal ${goalId} complete: ${Object.keys(progress.passes).length} passes, ` +
+        `${spend.inputTokens} in / ${spend.outputTokens} out tokens, attempt ${progress.attempts}.`,
+    );
+
+    const [{ count: milestoneCount }, { count: taskCount }] = await Promise.all([
+      supabase.from("milestones").select("id", { count: "exact", head: true }).eq("goal_id", goalId),
+      supabase.from("tasks").select("id", { count: "exact", head: true }).eq("goal_id", goalId),
+    ]);
+
+    await supabase.from("ai_action_logs").insert([
+      {
+        user_id: userId,
+        goal_id: goalId,
+        action_type: "extract_plan",
+        structured_input: {
+          document_id: document?.id ?? null,
+          used_vision: Boolean(image),
+          passes: progress.passes,
+          usage: progress.usage,
+          attempt: progress.attempts,
+        },
+        structured_output: structure,
+        explanation: structure.reasoning,
+        model_version: modelVersion,
+      },
+      {
+        user_id: userId,
+        goal_id: goalId,
+        action_type: "smart_target",
+        structured_input: { outcome: structure.outcome, target_date: structure.target_date },
+        structured_output: smart,
+        explanation: smart.reasoning,
+        model_version: modelVersion,
+      },
+    ]);
+
+    await setExtractionState({ supabase, progress, state: "complete", note: null });
+    if (document) {
+      await supabase.from("plan_documents").update({ parse_status: "parsed" }).eq("id", document.id);
+    }
+
+    return {
+      plan: { ...structure, tasks: [] },
+      smart,
+      milestoneCount: milestoneCount ?? 0,
+      taskCount: taskCount ?? 0,
+    };
+  } catch (error) {
+    // Whatever landed stays landed. The document records how far it got so the
+    // next attempt resumes instead of paying for all of it again.
+    const written = await countMilestones(supabase, goalId);
+    const batchesTotal = Math.max(1, Math.ceil(written / MILESTONES_PER_TASK_PASS));
+    const batchesDone = Object.keys(progress.passes).filter((k) => k.startsWith("tasks:")).length;
+    const note = describePartial({ milestonesWritten: written, batchesDone, batchesTotal });
+
+    await setExtractionState({ supabase, progress, state: "failed_partial", note });
+
+    const spend = totalUsage(progress);
+    console.error(
+      `[extract] goal ${goalId} stopped on attempt ${progress.attempts} after ` +
+        `${Object.keys(progress.passes).length} passes ` +
+        `(${spend.inputTokens} in / ${spend.outputTokens} out tokens):`,
+      error,
+    );
+
+    // A misconfiguration is not a partial extraction — it is not retryable and
+    // saying "try again" would be wrong.
+    if (error instanceof ConfigurationError) throw error;
+
+    // The user gets what survived and what to do about it. The cause is above,
+    // in the logs, where it belongs — "Couldn't save tasks: column ... does not
+    // exist" is a message for me, not for them.
+    throw new AIExtractionError(note);
+  }
 }

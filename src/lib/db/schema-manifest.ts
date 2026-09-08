@@ -149,7 +149,13 @@ export const EXPECTED_SCHEMA: Record<string, readonly string[]> = {
   "plan_documents": [
     "byte_size", // 0001_foundation.sql
     "created_at", // 0001_foundation.sql
+    "extracted_structure", // 0007_resumable_extraction.sql
     "extracted_text", // 0001_foundation.sql
+    "extraction_attempts", // 0007_resumable_extraction.sql
+    "extraction_note", // 0007_resumable_extraction.sql
+    "extraction_passes", // 0007_resumable_extraction.sql
+    "extraction_state", // 0007_resumable_extraction.sql
+    "extraction_usage", // 0007_resumable_extraction.sql
     "filename", // 0001_foundation.sql
     "goal_id", // 0001_foundation.sql
     "id", // 0001_foundation.sql
