@@ -1,0 +1,62 @@
+name: Dispatch reminders
+
+# Hourly reminder delivery (PRD §12, §22 "durable scheduled job system").
+#
+# This lives here rather than in vercel.json because the project is on Vercel's
+# Hobby plan, where cron jobs may only run ONCE PER DAY. An hourly schedule in
+# vercel.json is rejected when Vercel creates the deployment — which is why
+# every commit after Milestone 6 was accepted as PENDING and then never built.
+#
+# A once-daily run would technically be allowed, but it would make reminders
+# useless: a checkpoint scheduled for 09:15 would not go out until the next
+# day's run. GitHub Actions gives us the hourly cadence the product needs, for
+# free on a public repo, hitting the same secret-guarded endpoint.
+#
+# Requires repository secrets:
+#   CRON_SECRET  — must match the CRON_SECRET set in Vercel
+#   SITE_URL     — optional; defaults to the production domain
+
+on:
+  schedule:
+    # Hourly. GitHub may delay a scheduled run under load; the dispatcher is
+    # idempotent (it only picks up reminders still marked pending), so a late
+    # or repeated run is harmless.
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+# Never let two dispatch runs overlap.
+concurrency:
+  group: reminders
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Deliver due reminders
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call the dispatch endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ secrets.SITE_URL || 'https://www.vezriqen.com' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET is not set. Add it as a repository secret, matching the value in Vercel."
+            exit 1
+          fi
+
+          response=$(mktemp)
+          status=$(curl -sS -o "$response" -w '%{http_code}' \
+            --max-time 300 \
+            -X POST "$SITE_URL/api/cron/reminders" \
+            -H "Authorization: Bearer $CRON_SECRET")
+
+          echo "HTTP $status"
+          cat "$response"
+          echo
+
+          # A non-2xx is a real failure: reminders did not go out.
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Reminder dispatch failed with HTTP $status"
+            exit 1
+          fi

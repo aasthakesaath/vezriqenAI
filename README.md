@@ -155,6 +155,21 @@ Authorised redirect URI: `https://www.vezriqen.com/api/calendar/callback`.
 | `EMAIL_ACTION_SIGNING_KEY` | Signs Done/Snooze/Stuck links — `openssl rand -base64 32` |
 | `CRON_SECRET` | Bearer secret for `/api/cron/reminders` — `openssl rand -base64 32` |
 
+Reminder delivery is driven by the **GitHub Actions** workflow
+`.github/workflows/reminders.yml`, hourly, not by a Vercel cron.
+
+That is deliberate. This project is on Vercel's **Hobby** plan, where a cron job
+may only run **once per day**. An hourly `crons` entry in `vercel.json` is
+rejected at deployment *creation*, so no build is ever produced — the deploy
+hook reports PENDING and nothing happens. That is exactly what stalled
+production between Milestones 6 and 7. A once-daily run would be permitted but
+would make reminders useless: a checkpoint due at 09:15 would not go out until
+the next day.
+
+The workflow needs two repository secrets: `CRON_SECRET` (matching the value in
+Vercel) and optionally `SITE_URL`. Moving back to a Vercel cron is only sensible
+on Pro.
+
 **Without `EMAIL_PROVIDER_API_KEY` the product still works.** Reminders appear
 in full in the in-app reminder centre, the delivery attempt is logged loudly,
 and the reminder is recorded as `suppressed` — never as `sent`. A check
