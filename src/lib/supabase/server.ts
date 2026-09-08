@@ -10,8 +10,13 @@ import { requireSupabaseBrowserConfig } from "@/lib/env";
  * input straight through without hand-rolling ownership checks.
  */
 export async function createClient() {
-  const { url, anonKey } = requireSupabaseBrowserConfig();
+  // cookies() first, deliberately. Touching it is what marks the route as
+  // dynamic; doing the config check before it means a missing key throws during
+  // static prerendering at build time instead of at request time, which fails
+  // the build rather than showing the configuration error the page is designed
+  // to render.
   const cookieStore = await cookies();
+  const { url, anonKey } = requireSupabaseBrowserConfig();
 
   return createServerClient(url, anonKey, {
     cookies: {

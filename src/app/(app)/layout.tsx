@@ -4,6 +4,13 @@ import { getUser } from "@/lib/supabase/server";
 import { SUPABASE_CONFIGURED } from "@/lib/env";
 
 /**
+ * Every page below this layout is per-user, so none of them may be statically
+ * prerendered — there is no build-time "everyone" to render for. Declaring it
+ * here rather than page by page means a new authenticated route cannot forget.
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * Shell for every signed-in route.
  *
  * The middleware already bounces anonymous requests; this second check is the

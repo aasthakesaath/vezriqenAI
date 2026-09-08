@@ -159,3 +159,23 @@ describe("Calendar writes stay within what Vezri created (PRD §11)", () => {
     expect(service).toMatch(/if \(!owned\) return false/);
   });
 });
+
+describe("authenticated pages are never prerendered", () => {
+  /**
+   * A per-user page rendered at build time has no user, so the Supabase client
+   * throws during export and the whole build fails — which is exactly what
+   * happened before this was declared. It also means a prerendered page could
+   * otherwise be served from cache to the wrong person.
+   */
+  it("forces dynamic rendering for the whole signed-in area", () => {
+    const layout = read(join(SRC, "app", "(app)", "layout.tsx"));
+    expect(layout).toContain('export const dynamic = "force-dynamic"');
+  });
+
+  it("reads cookies before checking config, so config errors render rather than crash the build", () => {
+    const server = read(join(SRC, "lib", "supabase", "server.ts"));
+    expect(server.indexOf("await cookies()")).toBeLessThan(
+      server.indexOf("requireSupabaseBrowserConfig()"),
+    );
+  });
+});
