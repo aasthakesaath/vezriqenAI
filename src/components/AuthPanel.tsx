@@ -1,8 +1,7 @@
 import Link from "next/link";
 import Wordmark from "@/components/Wordmark";
 import { BRAND, CTA_SUPPORT, ROUTES } from "@/lib/site";
-
-const GOOGLE_CONFIGURED = Boolean(process.env.GOOGLE_CLIENT_ID);
+import { SUPABASE_CONFIGURED } from "@/lib/env";
 
 function GoogleMark() {
   return (
@@ -35,7 +34,7 @@ export default function AuthPanel({ mode }: { mode: "signin" | "signup" }) {
         <input type="hidden" name="mode" value={mode} />
         <button
           type="submit"
-          disabled={!GOOGLE_CONFIGURED}
+          disabled={!SUPABASE_CONFIGURED}
           className="inline-flex w-full items-center justify-center gap-3 rounded-pill border border-blush bg-white px-6 py-3.5 text-base font-semibold text-ink shadow-soft transition-colors hover:bg-blush-wash disabled:cursor-not-allowed disabled:opacity-60"
         >
           <GoogleMark />
@@ -43,11 +42,11 @@ export default function AuthPanel({ mode }: { mode: "signin" | "signup" }) {
         </button>
       </form>
 
-      {!GOOGLE_CONFIGURED && (
+      {!SUPABASE_CONFIGURED && (
         <p role="status" className="mt-4 rounded-xl bg-cream-light px-4 py-3 text-sm text-mauve">
           Google sign-in isn&rsquo;t configured in this environment yet. Set{" "}
-          <code className="font-semibold">GOOGLE_CLIENT_ID</code> and{" "}
-          <code className="font-semibold">GOOGLE_CLIENT_SECRET</code> to enable it.
+          <code className="font-semibold">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
+          <code className="font-semibold">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to enable it.
         </p>
       )}
 

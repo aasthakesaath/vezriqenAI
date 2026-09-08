@@ -11,5 +11,5 @@ export default defineConfig({
       "next/image": fileURLToPath(new URL("./tests/mocks/next-image.tsx", import.meta.url)),
     },
   },
-  test: { globals: true, environment: "node", include: ["tests/**/*.test.tsx"] },
+  test: { globals: true, environment: "node", include: ["tests/**/*.test.{ts,tsx}"] },
 });

@@ -1,30 +1,48 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { SUPABASE_CONFIGURED } from "@/lib/env";
+import { SIGN_IN_SCOPE_STRING, SIGN_IN_SCOPES, assertNoCalendarScope } from "@/lib/auth/scopes";
 
 export const runtime = "nodejs";
 
 /**
- * Milestone 2 entry point for Google OAuth. Kept deliberately thin: it only
- * verifies configuration and hands off. Requests the sign-in scopes only —
- * Calendar consent is a separate, later grant (PRD §5, §23, §30.7).
+ * Starts Google sign-in through Supabase Auth.
+ *
+ * Supabase brokers the exchange and signs the session, so there is no
+ * AUTH_SECRET and no second session system to keep in step. Requests the
+ * sign-in scopes only — Calendar is a separate grant (PRD §5, §23, §30.7).
  */
-export async function POST() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-
-  if (!clientId || !redirectUri) {
+export async function POST(request: Request) {
+  if (!SUPABASE_CONFIGURED) {
     return NextResponse.json(
       { error: "Google sign-in is not configured in this environment." },
       { status: 503 },
     );
   }
 
-  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-  url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", "openid email profile");
-  url.searchParams.set("access_type", "offline");
-  url.searchParams.set("prompt", "consent");
+  // Belt and braces: fail loudly rather than silently escalating consent.
+  assertNoCalendarScope(SIGN_IN_SCOPES);
 
-  return NextResponse.redirect(url.toString(), 303);
+  const form = await request.formData().catch(() => null);
+  const next = typeof form?.get("next") === "string" ? String(form.get("next")) : "/start";
+
+  const origin = new URL(request.url).origin;
+  const callback = new URL("/api/auth/google/callback", origin);
+  // Only same-site paths survive, so `next` cannot be used as an open redirect.
+  callback.searchParams.set("next", next.startsWith("/") ? next : "/start");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: callback.toString(), scopes: SIGN_IN_SCOPE_STRING },
+  });
+
+  if (error || !data?.url) {
+    return NextResponse.json(
+      { error: error?.message ?? "Could not start Google sign-in." },
+      { status: 502 },
+    );
+  }
+
+  return NextResponse.redirect(data.url, 303);
 }
