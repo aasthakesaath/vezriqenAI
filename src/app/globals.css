@@ -32,7 +32,20 @@
   }
 }
 
+/* The mascot's idle bob while Vezri is working. The base-layer
+   prefers-reduced-motion rule above collapses this to 0.01ms, which leaves a
+   still portrait — correct, because the stage text is what actually reports
+   progress, and it keeps changing either way. */
+@keyframes vezri-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
 @layer components {
+  .animate-vezri-bob {
+    animation: vezri-bob 3.5s ease-in-out infinite;
+  }
+
   .shell {
     @apply mx-auto w-full max-w-shell px-5 sm:px-8;
   }

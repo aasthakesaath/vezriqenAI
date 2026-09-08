@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AUDIT_LABEL } from "@/lib/app-copy";
+import VezriWorking from "@/components/VezriWorking";
+import { AUDIT_LABEL, AUDIT_STEPS } from "@/lib/app-copy";
 
 type AuditGap = { title: string; explanation: string; category: string };
 type AuditResponse = { gaps: AuditGap[]; next_move: string | null };
@@ -51,10 +52,13 @@ export default function AuditPanel({ goalId }: { goalId: string }) {
         that&rsquo;s behind.
       </p>
 
-      {error && (
-        <p role="alert" className="mt-4 rounded-xl bg-cream-light px-4 py-3 text-sm text-ink">
-          {error}
-        </p>
+      {(busy || error) && (
+        <VezriWorking
+          className="mt-5"
+          stages={AUDIT_STEPS}
+          error={error}
+          onRetry={error ? () => void run() : undefined}
+        />
       )}
 
       {result && (

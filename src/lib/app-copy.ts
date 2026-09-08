@@ -31,11 +31,35 @@ export const INTAKE_MODES = [
 export type IntakeModeId = (typeof INTAKE_MODES)[number]["id"];
 
 /** PRD §5 Step 3 — shown while Vezri reads the plan. */
+/**
+ * Stage lines for the shared VezriWorking component.
+ *
+ * Plain language only: the user is told what Vezri is doing for them, never
+ * what the system is doing. "Reading your plan", not "extracting"; "working
+ * out the timing", not "resolving dependencies and lead time".
+ *
+ * These advance on a timer because a single model call has no intermediate
+ * events to report — which is precisely why VezriWorking shows no progress
+ * bar. Stage text that turns out to be optimistic is a small cost; a bar that
+ * looks measured and isn't would be a lie about how far along the work is.
+ */
 export const UNDERSTANDING_STEPS = [
-  "Reading the plan",
-  "Finding the target",
-  "Finding deadlines and dependencies",
-  "Building the execution path",
+  "Reading your plan",
+  "Finding your milestones",
+  "Working out the timing",
+] as const;
+
+/** PRD §16 — the "What am I missing?" audit is a model call too. */
+export const AUDIT_STEPS = [
+  "Looking at your goal",
+  "Checking what your plan needs",
+  "Finding what nothing is producing yet",
+] as const;
+
+/** PRD §13 — the Execution Block Coach. */
+export const COACH_STEPS = [
+  "Thinking about what got in the way",
+  "Working out the smallest way forward",
 ] as const;
 
 /** PRD §13 Step 1 — the one short question, and its quick choices. */

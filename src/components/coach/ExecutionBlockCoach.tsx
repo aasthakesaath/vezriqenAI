@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BLOCK_CHOICES, BLOCK_QUESTION } from "@/lib/app-copy";
+import VezriWorking from "@/components/VezriWorking";
+import { BLOCK_CHOICES, BLOCK_QUESTION, COACH_STEPS } from "@/lib/app-copy";
 
 type Proposal = {
   new_task_title: string | null;
@@ -43,9 +44,14 @@ export default function ExecutionBlockCoach({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [applied, setApplied] = useState<"accepted" | "declined" | null>(null);
+  // `busy` covers both requests; `thinking` is only the model call, so the
+  // waiting state never appears for the one-field write that accepts or
+  // declines an intervention.
+  const [thinking, setThinking] = useState<string | null>(null);
 
   async function chooseBarrier(category: string) {
     setBusy(true);
+    setThinking(category);
     setError(null);
     const response = await fetch(`/api/tasks/${taskId}/block`, {
       method: "POST",
@@ -63,6 +69,7 @@ export default function ExecutionBlockCoach({
       return;
     }
     setIntervention((await response.json()) as Intervention);
+    setThinking(null);
     setBusy(false);
   }
 
@@ -185,12 +192,17 @@ export default function ExecutionBlockCoach({
         />
       </fieldset>
 
-      {busy && (
-        <p aria-live="polite" className="mt-3 text-sm text-mauve">
-          Working out the smallest way forward…
-        </p>
+      {thinking && (
+        <VezriWorking
+          className="mt-4 p-6"
+          stages={COACH_STEPS}
+          stageMs={4000}
+          note="Almost there."
+          error={error}
+          onRetry={error ? () => void chooseBarrier(thinking) : undefined}
+        />
       )}
-      {error && (
+      {error && !thinking && (
         <p role="alert" className="mt-3 text-sm text-berry">
           {error}
         </p>

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { BRAND, CTA_PRIMARY, CTA_SUPPORT, ROUTES } from "@/lib/site";
+import { CTA_PRIMARY, CTA_SUPPORT, CTA_SUPPORT_SHORT, FINAL_CTA_HOME, ROUTES } from "@/lib/site";
 
 export function SignUpButton({ className = "" }: { className?: string }) {
   return (
@@ -11,8 +11,19 @@ export function SignUpButton({ className = "" }: { className?: string }) {
   );
 }
 
-export function CtaSupport({ className = "" }: { className?: string }) {
-  return <p className={`text-sm text-mauve-light ${className}`}>{CTA_SUPPORT}</p>;
+export function CtaSupport({
+  className = "",
+  short = false,
+}: {
+  className?: string;
+  /** The closing band uses the two-clause form (see CTA_SUPPORT_SHORT). */
+  short?: boolean;
+}) {
+  return (
+    <p className={`text-sm text-mauve-light ${className}`}>
+      {short ? CTA_SUPPORT_SHORT : CTA_SUPPORT}
+    </p>
+  );
 }
 
 /**
@@ -23,10 +34,12 @@ export function FinalCta({
   heading,
   support,
   withMascot = false,
+  shortSupport = false,
 }: {
   heading: string;
   support: string;
   withMascot?: boolean;
+  shortSupport?: boolean;
 }) {
   return (
     <section className="shell pb-20 pt-4">
@@ -45,7 +58,7 @@ export function FinalCta({
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-base text-mauve">{support}</p>
         <SignUpButton className="mt-7" />
-        <CtaSupport className="mt-4" />
+        <CtaSupport className="mt-4" short={shortSupport} />
       </div>
     </section>
   );
@@ -54,8 +67,10 @@ export function FinalCta({
 export function FinalCtaHome() {
   return (
     <FinalCta
-      heading="Ready to Turn Your Plan Into Progress?"
-      support={`Join ${BRAND} and start today \u2014 for free.`}
+      heading={FINAL_CTA_HOME.heading}
+      support={FINAL_CTA_HOME.support}
+      withMascot
+      shortSupport
     />
   );
 }

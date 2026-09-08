@@ -10,7 +10,10 @@ export const MASCOT = "Vezri";
 
 /** PRD §30.3 — the one primary CTA on every public surface. */
 export const CTA_PRIMARY = "Sign Up Free";
-export const CTA_SUPPORT = "Free to use \u00b7 no credit card \u00b7 start in under a minute";
+export const CTA_SUPPORT = "Free to use \u00b7 No credit card \u00b7 Start in under a minute";
+/** The final CTA drops the third clause: by then "start in under a minute" is
+ *  no longer news, and the shorter line reads as reassurance rather than pitch. */
+export const CTA_SUPPORT_SHORT = "Free to use \u00b7 No credit card";
 
 /** PRD §30.4 / §30.9 — the heart is part of the visible label. */
 export const MY_STORY_LABEL = "My Story \u2665";
@@ -56,29 +59,143 @@ export const LEGAL_CONTACT_EMAIL =
   process.env.NEXT_PUBLIC_LEGAL_CONTACT_EMAIL ?? "privacy@vezriqen.com";
 export const LEGAL_LAST_UPDATED = "September 8, 2026";
 
-/** PRD §30.5 — four how-it-works cards, homepage only. */
+/* --------------------------------------------------------------------------
+ * Homepage §1 — the hero.
+ *
+ * The headline is split because the accent lands on the second half: the
+ * promise is not "make a plan" (every planner offers that) but "finish it".
+ * Kept to one sentence of support — anything more pushes the CTA below the
+ * fold on a phone, which is the one thing §11 forbids.
+ * ---------------------------------------------------------------------- */
+export const HERO = {
+  /** Rendered uppercase by CSS; stored sentence-case so screen readers and
+   *  the brand rule are unaffected by the typographic treatment. */
+  eyebrow: "Your goals. A smarter way.",
+  headingLead: "Don\u2019t Just Make a Plan.",
+  headingTurn: "Finish It.",
+  support: `Upload your plan. ${MASCOT} helps you follow it, get unstuck, adjust when life happens, and reach the goal.`,
+} as const;
+
+/**
+ * Homepage §2 — "How Vezri Keeps You Moving".
+ *
+ * Four cards, one line of body each. The order is the product's own arc:
+ * bring the plan in, work out what matters, recover when it slips, keep the
+ * goal when the path has to change. The last two are the differentiators, so
+ * they are never dropped on a narrow screen — the grid stacks, it does not
+ * truncate.
+ */
 export const HOW_IT_WORKS = [
   {
     id: "upload",
     title: "Upload Your Plan",
-    body: "Share your plan (PDF, Word, image, or text) and turn it into simple steps.",
+    body: "Bring a PDF, document, or plan created with any AI.",
   },
   {
-    id: "schedule",
-    title: "Smart Scheduling",
-    body: "Vezri works with your calendar to find the right time and starts important work early enough.",
-  },
-  {
-    id: "track",
-    title: "Stay On Track",
-    body: "Context-aware reminders, check-ins, and flexible adjustments when life changes.",
+    id: "matters",
+    title: "Know What Matters",
+    body: `Works backward from your goal and finds the next useful step.`,
   },
   {
     id: "unstuck",
     title: "Get Unstuck",
-    body: "If you do not complete a task, Vezri helps identify what got in the way and finds the smallest useful way forward.",
+    body: `Didn\u2019t do it? ${MASCOT} helps figure out what got in the way and finds a way forward.`,
+  },
+  {
+    id: "adjust",
+    title: "Adjust & Keep Going",
+    body: `When life changes, ${MASCOT} adjusts the path without losing the goal.`,
   },
 ] as const;
+
+export const HOW_IT_WORKS_TITLE = `How ${MASCOT} Keeps You Moving`;
+
+/* --------------------------------------------------------------------------
+ * Homepage §3 — the difference.
+ *
+ * The single most important section on the page: it is the one that separates
+ * this from a reminder app. Deliberately not a feature matrix. Two short
+ * columns and one sentence in Vezri's voice do more for a five-second read
+ * than a checklist ever would, and a dense comparison table invites the
+ * visitor to audit us rather than to recognise themselves.
+ * ---------------------------------------------------------------------- */
+export const USP = {
+  heading: "More Than Reminders.",
+  subheadLead: "Most apps move a missed task.",
+  subheadTurn: `${MASCOT} helps solve why it was missed.`,
+  /** Left column: what a planner, tracker or calendar tool does. */
+  ordinary: { label: "Most Apps", steps: ["Plan", "Remind", "Reschedule"] },
+  /** Right column: the same start, a different ending. */
+  ours: {
+    label: BRAND,
+    steps: ["Plan", "Act", "Understand what got in the way", "Adjust", "Achieve"],
+  },
+  quote: `You didn\u2019t finish it. Let\u2019s figure out what got in the way \u2014 not just move it to tomorrow.`,
+} as const;
+
+/* --------------------------------------------------------------------------
+ * Homepage §4 — lead time, shown rather than explained.
+ *
+ * Each row is a concrete situation, the shift Vezri makes, and the one-line
+ * reason. The reason column is what stops this reading as a scheduling trick:
+ * the point is that Vezri knows *why* the date has to move.
+ * ---------------------------------------------------------------------- */
+export const THINKS_AHEAD = [
+  {
+    trigger: "Recommendation due Nov 1",
+    move: "Start Oct 10",
+    why: "Another person needs time to respond.",
+  },
+  {
+    trigger: "Morning routine at 6:30 AM",
+    move: "Prepare tonight",
+    why: "The useful reminder comes before the morning starts.",
+  },
+  {
+    trigger: "Certification in 6 weeks",
+    move: "Recovery plan",
+    why: "You\u2019re 3 hours behind, but the goal is still achievable.",
+  },
+] as const;
+
+export const THINKS_AHEAD_HEADING = `${MASCOT} Thinks Ahead.`;
+
+/* --------------------------------------------------------------------------
+ * Homepage §5 — personalisation.
+ *
+ * Every line describes the plan or the work, never the person. "Large tasks
+ * keep getting postponed" is an observation about tasks; "you procrastinate"
+ * is a diagnosis, and this product does not make them.
+ * ---------------------------------------------------------------------- */
+export const PERSONALIZATION = {
+  headingLead: "Your Plan Shouldn\u2019t Be Generic.",
+  headingTurn: "Neither Should Your Coach.",
+  support: `${MASCOT} learns when you actually get things done and adapts over time.`,
+  rows: [
+    { observation: "Evening reminders work better for you", response: `${MASCOT} shifts them later.` },
+    { observation: "Large tasks keep getting postponed", response: `${MASCOT} breaks them down.` },
+    { observation: "Outside dependencies take longer", response: `${MASCOT} starts them earlier.` },
+  ],
+} as const;
+
+/* --------------------------------------------------------------------------
+ * Homepage §6 — My Story teaser. Two lines and a link; the story itself stays
+ * on /about, where §30.6 put it.
+ * ---------------------------------------------------------------------- */
+export const STORY_TEASER = {
+  heading: "Built From a Real Problem \u2665",
+  lines: [
+    "I had an SAT study plan.",
+    "The hard part wasn\u2019t making it \u2014 it was following it.",
+  ],
+  cta: `Read ${MY_STORY_LABEL}`,
+} as const;
+
+/** Homepage §7 — the closing ask. */
+export const FINAL_CTA_HOME = {
+  heading: "Have a Plan You\u2019re Ready to Finish?",
+  support: `Upload it. Let ${MASCOT} help you keep moving.`,
+} as const;
 
 /** PRD §30.6 — approved My Story narrative, kept as data so it stays verbatim. */
 export const MY_STORY_PARAGRAPHS = [

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import UnderstandingProgress from "./UnderstandingProgress";
+import VezriWorking from "@/components/VezriWorking";
+import { UNDERSTANDING_STEPS } from "@/lib/app-copy";
 import TargetCard, { type TargetCardData } from "./TargetCard";
 import PlanConfirmation, { type PlanMilestone, type PlanTask } from "./PlanConfirmation";
 
@@ -70,25 +71,18 @@ export default function ReviewFlow({
     void extract();
   }, [needsExtraction, extract]);
 
-  if (phase === "reading") {
+  // The wait and the failure are the same component: a model call that fails
+  // must not drop the user onto a differently-shaped screen, and keeping both
+  // in VezriWorking is what guarantees a failed run always offers a way out
+  // instead of leaving the page loading forever.
+  if (phase === "reading" || phase === "error") {
     return (
-      <>
-        <p className="mt-3 text-lg text-mauve">Vezri is reading your plan.</p>
-        <UnderstandingProgress active />
-      </>
-    );
-  }
-
-  if (phase === "error") {
-    return (
-      <div className="mt-8 rounded-2xl border border-blush bg-white p-6 shadow-soft">
-        <p role="alert" className="text-ink">
-          {error}
-        </p>
-        <button type="button" onClick={() => void extract()} className="btn-primary mt-5">
-          Try again
-        </button>
-      </div>
+      <VezriWorking
+        className="mt-8"
+        stages={UNDERSTANDING_STEPS}
+        error={phase === "error" ? error : null}
+        onRetry={() => void extract()}
+      />
     );
   }
 

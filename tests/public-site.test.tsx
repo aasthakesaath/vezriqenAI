@@ -10,15 +10,26 @@ import FeedbackPage from "@/app/feedback/page";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AuthPanel from "@/components/AuthPanel";
+import VezriWorking from "@/components/VezriWorking";
 import {
   BRAND,
   CTA_PRIMARY,
   CTA_SUPPORT,
+  CTA_SUPPORT_SHORT,
+  FINAL_CTA_HOME,
+  HERO,
   HOW_IT_WORKS,
+  HOW_IT_WORKS_TITLE,
   MY_STORY_LABEL,
   MY_STORY_PULLQUOTE,
+  PERSONALIZATION,
   ROUTES,
+  STORY_TEASER,
+  THINKS_AHEAD,
+  THINKS_AHEAD_HEADING,
+  USP,
 } from "@/lib/site";
+import { UNDERSTANDING_STEPS } from "@/lib/app-copy";
 
 const html = (el: ReactElement) => renderToStaticMarkup(el);
 
@@ -120,25 +131,86 @@ describe("navigation (PRD §30.4, §30.9, §30.13)", () => {
 
 describe("homepage (PRD §30.5, §30.13)", () => {
   it("uses the approved hero copy", () => {
-    expect(homeText).toContain("Your goals. A smarter way.");
-    expect(homeText).toContain("Turn Your Plans");
-    expect(homeText).toContain("Into Progress.");
+    expect(homeText).toContain(HERO.eyebrow);
+    expect(homeText).toContain("Don\u2019t Just Make a Plan.");
+    expect(homeText).toContain("Finish It.");
     expect(homeText).toContain(
-      "Upload your plan. Vezri helps you follow it, adjust when life happens, and achieve your goals.",
+      "Upload your plan. Vezri helps you follow it, get unstuck, adjust when life happens, and reach the goal.",
     );
   });
 
-  it("carries the how-it-works anchor and all four cards", () => {
+  it("puts the accent colour on the second half of the headline", () => {
+    // "Finish It." is the differentiator; the emphasis has to land there and
+    // not on "Don't Just Make a Plan.", which any planner could say.
+    expect(home).toMatch(
+      new RegExp(`<span class="text-berry">${HERO.headingTurn.replace(".", "\\.")}</span>`),
+    );
+  });
+
+  it("carries the how-it-works anchor, its title and all four cards", () => {
     expect(home).toContain('id="how-it-works"');
+    expect(homeText).toContain(HOW_IT_WORKS_TITLE);
     for (const card of HOW_IT_WORKS) {
       expect(homeText).toContain(card.title);
       expect(homeText).toContain(card.body);
     }
   });
 
-  it("includes the progress preview and final CTA sections", () => {
-    expect(homeText).toContain("Progress Feels Good.");
-    expect(homeText).toContain("Ready to Turn Your Plan Into Progress?");
+  it("renders the difference section as a two-column comparison", () => {
+    expect(homeText).toContain(USP.heading);
+    expect(homeText).toContain(USP.subheadLead);
+    expect(homeText).toContain(USP.subheadTurn);
+
+    // Both columns, in full. A visitor who only sees our column learns
+    // nothing: the section works by contrast or not at all.
+    expect(homeText).toContain(USP.ordinary.label);
+    for (const step of USP.ordinary.steps) expect(homeText).toContain(step);
+    expect(homeText).toContain(USP.ours.label);
+    for (const step of USP.ours.steps) expect(homeText).toContain(step);
+
+    // The three steps that only our column has are the whole argument.
+    for (const step of ["Understand what got in the way", "Adjust", "Achieve"]) {
+      expect(USP.ours.steps).toContain(step);
+      expect(USP.ordinary.steps).not.toContain(step);
+    }
+
+    expect(homeText).toContain(USP.quote);
+  });
+
+  it("shows all three lead-time examples with the reason for each", () => {
+    expect(homeText).toContain(THINKS_AHEAD_HEADING);
+    expect(THINKS_AHEAD).toHaveLength(3);
+    for (const row of THINKS_AHEAD) {
+      expect(homeText).toContain(row.trigger);
+      expect(homeText).toContain(row.move);
+      // The reason is what separates this from a scheduling trick.
+      expect(homeText).toContain(row.why);
+    }
+  });
+
+  it("shows the personalisation rows without diagnosing the user", () => {
+    expect(homeText).toContain(PERSONALIZATION.headingLead);
+    expect(homeText).toContain(PERSONALIZATION.headingTurn);
+    expect(homeText).toContain(PERSONALIZATION.support);
+    for (const row of PERSONALIZATION.rows) {
+      expect(homeText).toContain(row.observation);
+      expect(homeText).toContain(row.response);
+    }
+  });
+
+  it("teases My Story and links to the full page rather than repeating it", () => {
+    expect(homeText).toContain(STORY_TEASER.heading);
+    for (const line of STORY_TEASER.lines) expect(homeText).toContain(line);
+    expect(home).toContain(`href="${ROUTES.about}"`);
+    // The story itself stays on /about (PRD §30.6).
+    expect(homeText).not.toContain(MY_STORY_PULLQUOTE);
+    expect(homeText).not.toContain("preparing for the SAT");
+  });
+
+  it("closes with the final CTA and its shorter reassurance line", () => {
+    expect(homeText).toContain(FINAL_CTA_HOME.heading);
+    expect(homeText).toContain(FINAL_CTA_HOME.support);
+    expect(homeText).toContain(CTA_SUPPORT_SHORT);
   });
 
   it("shows Sign Up Free in the hero and the final CTA, with support text", () => {
@@ -152,11 +224,78 @@ describe("homepage (PRD §30.5, §30.13)", () => {
   });
 
   it("stays scannable — materially less body copy than a typical SaaS landing page", () => {
-    expect(homeText.trim().split(/\s+/).length).toBeLessThan(400);
+    // The page gained three sections in the conversion rewrite and still got
+    // shorter: 330 words against the previous build. The cap is that plus
+    // ~15% headroom, so it went DOWN from 400 rather than up. Raising it is a
+    // decision, not a fix — if a change needs more words, the words are the
+    // thing to question first.
+    expect(homeText.trim().split(/\s+/).length).toBeLessThan(380);
   });
 
   it("exposes exactly one h1", () => {
     expect((home.match(/<h1/g) ?? []).length).toBe(1);
+  });
+});
+
+describe("Vezri working state (shared model-call loading component)", () => {
+  const working = html(<VezriWorking stages={UNDERSTANDING_STEPS} />);
+  const failed = html(
+    <VezriWorking stages={UNDERSTANDING_STEPS} error="Vezri couldn't read that plan." />,
+  );
+
+  it("announces itself politely and marks the region busy", () => {
+    expect(working).toContain('role="status"');
+    expect(working).toContain('aria-live="polite"');
+    expect(working).toContain('aria-busy="true"');
+  });
+
+  it("opens on the first stage, in plain language", () => {
+    expect(text(<VezriWorking stages={UNDERSTANDING_STEPS} />)).toContain(
+      UNDERSTANDING_STEPS[0],
+    );
+    for (const jargon of [
+      "extraction",
+      "extracting",
+      "provenance",
+      "schema",
+      "parsing",
+      "SMART",
+      "dependency engine",
+      "execution profile",
+      "lead-time",
+    ]) {
+      expect(text(<VezriWorking stages={UNDERSTANDING_STEPS} />).toLowerCase()).not.toContain(
+        jargon.toLowerCase(),
+      );
+    }
+  });
+
+  it("reports no percentage and renders no progress bar", () => {
+    // Honest progress: a single model call has no intermediate events, so
+    // there is nothing a bar could truthfully measure. Stage text only.
+    //
+    // The percentage check is on the visible text, not the markup: the markup
+    // legitimately carries percentages in Tailwind position classes.
+    expect(text(<VezriWorking stages={UNDERSTANDING_STEPS} />)).not.toMatch(/\d+\s*%/);
+    expect(working).not.toContain('role="progressbar"');
+    expect(working).not.toContain("aria-valuenow");
+  });
+
+  it("uses the approved mascot asset and hides it from screen readers", () => {
+    expect(working).toContain("/brand/vezri.webp");
+    expect(working).toContain('alt=""');
+  });
+
+  it("on failure says so plainly, offers a retry, and stops claiming to be busy", () => {
+    expect(failed).toContain('aria-busy="false"');
+    expect(failed).toContain('role="alert"');
+    expect(text(<VezriWorking stages={UNDERSTANDING_STEPS} error="Vezri couldn't read that plan." />))
+      .toContain("Vezri couldn't read that plan.");
+
+    const withRetry = text(
+      <VezriWorking stages={UNDERSTANDING_STEPS} error="Nope." onRetry={() => {}} />,
+    );
+    expect(withRetry).toContain("Try again");
   });
 });
 

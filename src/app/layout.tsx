@@ -8,18 +8,18 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://vezriqen.com"),
   title: {
-    default: `${BRAND} \u2014 Turn Your Plans Into Progress`,
+    default: `${BRAND} \u2014 Don\u2019t Just Make a Plan. Finish It.`,
     template: `%s \u2014 ${BRAND}`,
   },
   description:
-    `Upload your plan. Vezri helps you stay on track, get unstuck, and keep moving toward your goal. Sign up free.`,
+    "Upload your plan and let Vezri help you follow it, get unstuck, adjust when life changes, and reach your goal.",
   applicationName: BRAND,
   openGraph: {
     siteName: BRAND,
     type: "website",
-    title: `${BRAND} \u2014 Turn Your Plans Into Progress`,
+    title: `${BRAND} \u2014 Don\u2019t Just Make a Plan. Finish It.`,
     description:
-      "Upload your plan. Vezri helps you stay on track, get unstuck, and keep moving toward your goal. Sign up free.",
+      "Upload your plan and let Vezri help you follow it, get unstuck, adjust when life changes, and reach your goal.",
   },
   icons: { icon: "/brand/vezri.png" },
 };
