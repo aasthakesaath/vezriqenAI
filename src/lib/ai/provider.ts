@@ -69,6 +69,37 @@ export class AIExtractionError extends Error {
  * Truncated output is never partially usable: the JSON ends mid-value, so
  * there is nothing to salvage and nothing is written.
  */
+/**
+ * Why a call failed, so the user can be told something they can act on.
+ *
+ * "Vezri couldn't reach the service that reads plans" covered a bad key, a
+ * rate limit, a timeout and a real outage identically. Those need four
+ * different responses from the user and from us, and the generic message sent
+ * a production 401 looking like a network blip for hours.
+ */
+export type AIFailureKind =
+  | "not_configured"
+  | "unauthorised"
+  | "rate_limited"
+  | "timed_out"
+  | "unavailable"
+  | "bad_request"
+  | "unusable_output"
+  | "truncated";
+
+/** Thrown when the provider call itself failed, with the cause classified. */
+export class AIServiceError extends AIExtractionError {
+  constructor(
+    message: string,
+    readonly kind: AIFailureKind,
+    readonly status: number | null,
+    cause?: unknown,
+  ) {
+    super(message, cause);
+    this.name = "AIServiceError";
+  }
+}
+
 export class AITruncationError extends AIExtractionError {
   constructor(
     message: string,

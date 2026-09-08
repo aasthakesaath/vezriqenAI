@@ -5,7 +5,8 @@ import CalendarConnection from "@/components/app/CalendarConnection";
 import ReminderPreferences from "@/components/app/ReminderPreferences";
 import { isCalendarConfigured } from "@/lib/calendar/google";
 import { getEmailProvider } from "@/lib/email";
-import { VezriPoseImage, POSE_FOR } from "@/components/VezriWorking";
+import { VezriPoseImage } from "@/components/VezriWorking";
+import { POSE_FOR } from "@/lib/vezri-poses";
 import { APP_ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = { title: "Settings", robots: { index: false } };
@@ -20,16 +21,23 @@ export default async function SettingsPage({
   const user = await getUser();
   const supabase = await createClient();
 
+  // The layout redirects an anonymous request, but a layout and the page below
+  // it render CONCURRENTLY in the App Router — the redirect does not stop this
+  // function from running. `user!.id` therefore threw on a signed-out request,
+  // which is the /settings 500 in the logs. Returning null renders nothing and
+  // lets the layout's redirect land.
+  if (!user) return null;
+
   const [{ data: profile }, { data: connection }] = await Promise.all([
     supabase
       .from("profiles")
       .select("reminder_style, accountability_level, productive_window, email_reminders, quiet_hours_start, quiet_hours_end")
-      .eq("id", user!.id)
+      .eq("id", user.id)
       .maybeSingle(),
     supabase
       .from("calendar_connections")
       .select("google_email, status")
-      .eq("user_id", user!.id)
+      .eq("user_id", user.id)
       .maybeSingle(),
   ]);
 

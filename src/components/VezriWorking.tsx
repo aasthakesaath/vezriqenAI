@@ -2,6 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { POSES, POSE_FOR, poseAlt, type VezriPose } from "@/lib/vezri-poses";
+
+// Re-exported so client call sites can keep importing from here, while server
+// components import from "@/lib/vezri-poses" directly. A "use client" module's
+// exports become client references in the server bundle — importing POSE_FOR
+// from here into a server page yielded undefined and crashed four pages.
+export { POSES, POSE_FOR, poseAlt };
+export type { VezriPose };
 
 /**
  * The waiting, empty and failure states for anything that takes real time.
@@ -22,87 +30,6 @@ import Image from "next/image";
  * POSE_FOR below, which is the single place a product state is mapped to a
  * drawing.
  */
-
-export type VezriPose = "reading" | "thinking" | "confused";
-
-/**
- * The three poses and their intrinsic sizes. Nothing outside this file names a
- * Vezri image file: a screen asks for a pose and gets whatever art currently
- * represents it.
- *
- * `alt` describes the STATE, not the bird — a screen reader user needs "Vezri
- * is reading your plan", not "a pink falcon". It is only used where the image
- * stands alone; inside VezriWorking the visible stage line already says this,
- * so the image is decorative there and carries alt="".
- */
-const POSES: Record<
-  VezriPose,
-  { src: string; width: number; height: number; alt: string }
-> = {
-  reading: {
-    src: "/brand/vezri-reading.webp",
-    width: 454,
-    height: 760,
-    alt: "Vezri is reading your plan",
-  },
-  thinking: {
-    src: "/brand/vezri-thinking.webp",
-    width: 357,
-    height: 760,
-    alt: "Vezri is working this out",
-  },
-  confused: {
-    src: "/brand/vezri-confused.webp",
-    width: 375,
-    height: 760,
-    alt: "Vezri ran into a problem",
-  },
-};
-
-/**
- * Product state → pose. THE one place this mapping is decided.
- *
- * `confused` is reserved for genuine problems — something failed or was
- * rejected. It is deliberately absent from every state that follows a user
- * saying they did not do something: §13 requires the coach to be
- * non-judgmental, and a puzzled mascot holding a question mark at that moment
- * reads as disappointment however the copy is worded. `coachFailure` is
- * therefore `thinking` even though it is a real failure — the error text
- * carries the problem, and the drawing stays neutral.
- *
- * It is equally absent from the good empty states ("Nothing needs you today",
- * "Nothing outstanding", "Nothing structural is missing"). Being caught up is
- * not a problem, and it should not be illustrated as one.
- */
-export const POSE_FOR = {
-  /** §5 Step 3 — Vezri reads the uploaded or pasted plan. */
-  readingPlan: "reading",
-  /** §5 Step 6 — turning the confirmed target into an active plan. */
-  buildingPlan: "thinking",
-  /** §16 — the "What am I missing?" audit. */
-  audit: "thinking",
-  /** §15 — a Goal Health explanation. */
-  goalHealth: "thinking",
-  /** §13 — the coach working out the smallest way forward. */
-  coach: "thinking",
-  /** Extraction failed, the plan could not be read. */
-  failure: "confused",
-  /** §7 — the upload was rejected before anything was read. */
-  uploadRejected: "confused",
-  /** §13 — a coach failure. Never `confused`; see above. */
-  coachFailure: "thinking",
-} as const satisfies Record<string, VezriPose>;
-
-/**
- * The state description for a pose, for callers that need a described image.
- *
- * Exported so nothing has to retype it — including the tests, which would
- * otherwise be asserting against their own copy rather than against what the
- * component actually renders.
- */
-export function poseAlt(pose: VezriPose): string {
-  return POSES[pose].alt;
-}
 
 /**
  * A pose on its own, for empty and error states outside a waiting card.
@@ -158,12 +85,34 @@ export interface VezriWorkingProps {
   errorPose?: VezriPose;
   /** Shown as a button beside the error. Omit and no retry is offered. */
   onRetry?: () => void;
-  /** Quiet line under the stage text. */
+  /**
+   * Quiet line under the stage text. Omit it and the component says something
+   * true for how long the wait has actually run — see NOTES.
+   */
   note?: string;
   className?: string;
 }
 
-const DEFAULT_NOTE = "This takes a few seconds.";
+/**
+ * The line under the stage text, chosen by how long the wait has actually run.
+ *
+ * "This takes a few seconds" was false. A 58 KB plan took 138 seconds in
+ * testing, and telling someone "a few seconds" then holding them for over two
+ * minutes is most of what makes a slow screen feel broken. These say what is
+ * true at the moment they are read, and none of them is a countdown or a
+ * percentage — there is nothing honest to count.
+ */
+const NOTES: readonly { after: number; text: string }[] = [
+  { after: 0, text: "Vezri is reading your plan." },
+  { after: 12_000, text: "Larger plans take a minute or two." },
+  { after: 60_000, text: "Still working — nearly there." },
+];
+
+function noteFor(elapsedMs: number): string {
+  let text = NOTES[0].text;
+  for (const note of NOTES) if (elapsedMs >= note.after) text = note.text;
+  return text;
+}
 
 export default function VezriWorking({
   stages,
@@ -172,10 +121,11 @@ export default function VezriWorking({
   error = null,
   errorPose = "confused",
   onRetry,
-  note = DEFAULT_NOTE,
+  note,
   className = "",
 }: VezriWorkingProps) {
   const [index, setIndex] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     if (error) return;
@@ -184,10 +134,25 @@ export default function VezriWorking({
     return () => clearTimeout(timer);
   }, [index, stages.length, stageMs, error]);
 
+  // Drives the note only. Not a countdown and not shown to the user as a
+  // number — the wait has no honest estimate, and inventing one is the thing
+  // this component exists not to do.
+  useEffect(() => {
+    if (error) return;
+    const started = Date.now();
+    const tick = setInterval(() => setElapsed(Date.now() - started), 5_000);
+    return () => clearInterval(tick);
+  }, [error]);
+
   const shell =
     "flex flex-col items-center gap-4 rounded-2xl border border-blush bg-white p-8 text-center shadow-soft";
 
-  if (error) {
+  // Explicitly "is there an error", not "is the string truthy". An empty
+  // message is still a failure, and treating "" as success is what kept the
+  // waiting state on screen after the server had already said no.
+  const failed = error !== null && error !== undefined;
+
+  if (failed) {
     return (
       // aria-busy false: the wait is over, it just ended badly. role="alert"
       // so the failure is announced immediately rather than politely queued.
@@ -195,7 +160,7 @@ export default function VezriWorking({
         <VezriPoseImage pose={errorPose} alt="" className="h-36 w-auto" />
         <div className="space-y-1.5">
           <p role="alert" className="text-[0.98rem] font-semibold text-ink">
-            {error}
+            {error || "Vezri couldn't finish that."}
           </p>
           <p className="text-sm text-mauve-light">Nothing was lost — you can try again.</p>
         </div>
@@ -214,7 +179,12 @@ export default function VezriWorking({
     <div role="status" aria-live="polite" aria-busy="true" className={`${shell} ${className}`}>
       {/* Decorative: the stage line below is the accessible name for this
           state, and it is already in the live region. */}
-      <span className="animate-vezri-bob">
+      {/* Calm presence, not a spinner: one slow breath, no bounce, no spin,
+          and never the only signal that the screen is alive — the stage line
+          changes on its own. The global prefers-reduced-motion rule collapses
+          every animation to 0.01ms, which leaves a still image and that text,
+          so nothing here needs a second suppression rule. */}
+      <span className="animate-vezri-breathe">
         <VezriPoseImage pose={pose} alt="" priority className="h-36 w-auto" />
       </span>
       <div className="space-y-1.5">
@@ -222,7 +192,7 @@ export default function VezriWorking({
           {stages[Math.min(index, stages.length - 1)]}
           <span aria-hidden="true">&hellip;</span>
         </p>
-        <p className="text-sm text-mauve-light">{note}</p>
+        <p className="text-sm text-mauve-light">{note ?? noteFor(elapsed)}</p>
       </div>
     </div>
   );

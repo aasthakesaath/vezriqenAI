@@ -4,7 +4,8 @@ import { createClient, getUser } from "@/lib/supabase/server";
 import { loadToday } from "@/lib/plan/load-today";
 import { groupByMilestone } from "@/lib/plan/today";
 import TodayList, { type TodayGroupView } from "@/components/app/TodayList";
-import { VezriPoseImage, POSE_FOR } from "@/components/VezriWorking";
+import { VezriPoseImage } from "@/components/VezriWorking";
+import { POSE_FOR } from "@/lib/vezri-poses";
 import { goalLabel } from "@/lib/goal-label";
 import { APP_ROUTES } from "@/lib/routes";
 

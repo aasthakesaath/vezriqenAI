@@ -21,4 +21,5 @@ export function getAIProvider(): AIProvider {
 }
 
 export type { AIProvider } from "./provider";
-export { AIExtractionError, AITruncationError } from "./provider";
+export { AIExtractionError, AIServiceError, AITruncationError } from "./provider";
+export type { AIFailureKind } from "./provider";

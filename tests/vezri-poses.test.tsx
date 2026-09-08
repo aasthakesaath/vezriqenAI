@@ -2,12 +2,8 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import VezriWorking, {
-  POSE_FOR,
-  VezriPoseImage,
-  poseAlt,
-  type VezriPose,
-} from "@/components/VezriWorking";
+import VezriWorking, { VezriPoseImage } from "@/components/VezriWorking";
+import { POSE_FOR, poseAlt, type VezriPose } from "@/lib/vezri-poses";
 import TodayList from "@/components/app/TodayList";
 import { UNDERSTANDING_STEPS, AUDIT_STEPS, COACH_STEPS } from "@/lib/app-copy";
 
@@ -58,7 +54,10 @@ describe("the pose map is the one place a state picks artwork", () => {
           continue;
         }
         if (!/\.tsx?$/.test(entry)) continue;
-        if (path.endsWith("components/VezriWorking.tsx")) continue;
+        // The two files that legitimately name the artwork: the pose table
+        // itself, and the component that renders it.
+        if (path.endsWith(join("lib", "vezri-poses.ts"))) continue;
+        if (path.endsWith(join("components", "VezriWorking.tsx"))) continue;
         const source = readFileSync(path, "utf8");
         if (/vezri-(reading|thinking|confused)\.webp/.test(source)) offenders.push(path);
       }

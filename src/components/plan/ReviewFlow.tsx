@@ -10,6 +10,15 @@ import PlanConfirmation, { type PlanMilestone, type PlanTask } from "./PlanConfi
 type Phase = "reading" | "target" | "plan" | "error";
 
 /**
+ * How long the client waits before giving up on extraction.
+ *
+ * Longer than the route's own 300s ceiling, so a server that answers slowly
+ * still wins the race and reports its own error; short enough that a request
+ * lost in transit cannot hold the screen indefinitely.
+ */
+const EXTRACTION_TIMEOUT_MS = 330_000;
+
+/**
  * Drives PRD §5 Steps 3 → 5 → 6.
  *
  * Extraction is kicked off from the client rather than during the server render
@@ -40,15 +49,29 @@ export default function ReviewFlow({
   const extract = useCallback(async () => {
     setPhase("reading");
     setError(null);
+
+    // A request that never settles is how the screen sat on "Working out the
+    // timing" for six minutes after the server had already answered 422. The
+    // waiting state must be bounded by something the client controls, not by
+    // the server's good behaviour.
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), EXTRACTION_TIMEOUT_MS);
+
     try {
-      const response = await fetch(`/api/goals/${goalId}/extract`, { method: "POST" });
+      const response = await fetch(`/api/goals/${goalId}/extract`, {
+        method: "POST",
+        signal: abort.signal,
+      });
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
         clarifying_questions?: string[];
         missing_information?: string[];
       };
       if (!response.ok) {
-        setError(payload.error ?? "Vezri couldn't read that plan.");
+        // `||`, not `??`: an empty-string error from the server is nullish-
+        // coalesced straight through, and VezriWorking treats "" as "no error"
+        // — which renders the waiting state forever on a failed request.
+        setError(payload.error || "Vezri couldn't read that plan.");
         setPhase("error");
         return;
       }
@@ -59,9 +82,15 @@ export default function ReviewFlow({
       // Pull the freshly written target and plan from the server.
       router.refresh();
       setPhase("target");
-    } catch {
-      setError("Couldn't reach Vezriqen. Check your connection and try again.");
+    } catch (caught) {
+      setError(
+        (caught as Error)?.name === "AbortError"
+          ? "That took longer than expected and Vezri stopped waiting. Your plan is saved — try again."
+          : "Couldn't reach Vezriqen. Check your connection and try again.",
+      );
       setPhase("error");
+    } finally {
+      clearTimeout(timer);
     }
   }, [goalId, router]);
 

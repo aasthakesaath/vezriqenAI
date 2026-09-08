@@ -64,50 +64,76 @@ export default function TodayList({ groups }: { groups: TodayGroupView[] }) {
           {/* The context a card needs: which milestone, which goal. Both link
               to the goal page rather than expanding here — Today shows three
               cards and 60 words of statement would push the other two off. */}
-          <h3 id={`group-${group.key}`} className="text-sm leading-relaxed">
+          {/* The goal, once per group. Never the SMART statement: it is ~60
+              words, it was rendering above every task title, and the full
+              target lives on the goal page. */}
+          <h3 id={`group-${group.key}`} className="text-sm font-semibold leading-relaxed">
             <Link
               href={`${APP_ROUTES.goals}/${group.goalId}`}
-              className="font-semibold text-berry hover:underline"
+              className="text-mauve hover:text-berry hover:underline"
             >
-              {group.milestoneTitle ?? group.goalLabel}
+              {group.goalLabel}
             </Link>
-            {group.milestoneTitle && (
-              <span className="text-mauve-light">
-                {" · "}
-                <Link
-                  href={`${APP_ROUTES.goals}/${group.goalId}`}
-                  className="hover:text-berry hover:underline"
-                >
-                  {group.goalLabel}
-                </Link>
-              </span>
-            )}
           </h3>
 
           <ul className="mt-3 space-y-4">
             {group.cards.map((card) => (
               <li
                 key={card.id}
-                className="rounded-2xl border border-blush bg-white p-6 shadow-soft"
+                className="rounded-2xl border border-blush bg-white p-5 shadow-soft sm:p-6"
               >
-                <h4 className="text-lg font-semibold leading-snug text-ink">{card.title}</h4>
-                <p className="mt-1.5 text-[0.98rem] leading-relaxed text-mauve">
-                  Because {card.reason}.
-                </p>
+                {/* Still a card, not a row of columns — §4 keeps this simpler
+                    than a task manager, and a three-column grid IS that
+                    pattern. Order is title, then context, then the quiet
+                    metadata line, then actions. */}
+                <h4 className="text-lg font-semibold leading-snug text-ink sm:text-xl">
+                  {card.title}
+                </h4>
 
-                {/* §3: a name, and nothing else. No invitation, no account for
-                    that person, no email to them — that is Phase 2. */}
-                {card.waitingOn && (
-                  <p className="mt-2 text-[0.95rem] text-mauve">
-                    <span className="font-medium text-ink">Waiting on:</span> {card.waitingOn}
+                {card.milestoneTitle && (
+                  <p className="mt-1 text-sm">
+                    <Link
+                      href={`${APP_ROUTES.goals}/${card.goalId}`}
+                      className="font-medium text-berry hover:underline"
+                    >
+                      {card.milestoneTitle}
+                    </Link>
                   </p>
                 )}
 
-                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-mauve-light">
+                <p className="mt-2 text-[0.98rem] leading-relaxed text-mauve">
+                  Because {card.reason}.
+                </p>
+
+                {/* One muted line. "Waiting on" belongs here rather than in a
+                    column of its own: most tasks have nobody, and an
+                    always-present empty column is noise. §3 keeps it to a
+                    NAME — no invitation, no account for that person, no email
+                    to them. */}
+                <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-mauve-light">
                   {card.estimatedMinutes && <span>~{card.estimatedMinutes} min</span>}
-                  {card.startBy && <span>Start by {shortDay(card.startBy)}</span>}
-                  {card.deadline && <span>Due {shortDay(card.deadline)}</span>}
-                </div>
+                  {card.startBy && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>Start by {shortDay(card.startBy)}</span>
+                    </>
+                  )}
+                  {card.deadline && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>Due {shortDay(card.deadline)}</span>
+                    </>
+                  )}
+                  {card.waitingOn && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>
+                        <span className="font-medium text-mauve">Waiting on:</span>{" "}
+                        {card.waitingOn}
+                      </span>
+                    </>
+                  )}
+                </p>
 
                 {coachFor === card.id ? (
                   <ExecutionBlockCoach

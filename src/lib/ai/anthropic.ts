@@ -6,10 +6,61 @@ import type { z } from "zod";
 import { AI_MODEL, ANTHROPIC_API_KEY, ConfigurationError } from "@/lib/env";
 import {
   AIExtractionError,
+  AIServiceError,
   AITruncationError,
+  type AIFailureKind,
   type AIProvider,
   type StructuredRequest,
 } from "./provider";
+
+/**
+ * Turns a provider failure into something the user can act on, and logs the
+ * real cause where only the server can see it.
+ *
+ * The generic "couldn't reach the service" hid a production 401 for hours: an
+ * expired key, a rate limit, a timeout and a genuine outage all read
+ * identically, and the four need different responses. The status code is on
+ * the SDK's error; nothing about it is secret from the server log, and nothing
+ * about it belongs in the browser.
+ */
+function classify(error: unknown, action: string): AIServiceError {
+  const e = error as { status?: number; name?: string; message?: string };
+  const status = typeof e?.status === "number" ? e.status : null;
+  const name = e?.name ?? "";
+
+  let kind: AIFailureKind = "unavailable";
+  let message =
+    "Vezri couldn't reach the service that reads plans. Please try again in a moment.";
+
+  if (status === 401 || status === 403) {
+    kind = "unauthorised";
+    // Not the user's fault and not something a retry fixes, so do not invite one.
+    message =
+      "Vezri isn't able to read plans right now — this needs a fix on our side, not another try.";
+  } else if (status === 429) {
+    kind = "rate_limited";
+    message = "Vezri is handling a lot at the moment. Try again in a minute.";
+  } else if (status === 400 || status === 422) {
+    kind = "bad_request";
+    message =
+      "Vezri couldn't work with that plan. Try a clearer version, or paste the plan text.";
+  } else if (
+    name.includes("Timeout") ||
+    name === "APIConnectionTimeoutError" ||
+    /timeout|timed out|aborted/i.test(e?.message ?? "")
+  ) {
+    kind = "timed_out";
+    message = "That took longer than Vezri could wait. Try again — large plans can need a second run.";
+  }
+
+  console.error(
+    `[ai] ${action} failed: kind=${kind} status=${status ?? "none"} name=${name || "unknown"} :: ${
+      e?.message ?? String(error)
+    }`,
+  );
+
+  return new AIServiceError(message, kind, status, error);
+}
 
 /**
  * Anthropic implementation of the provider abstraction.
@@ -96,12 +147,10 @@ export class AnthropicProvider implements AIProvider {
           })
           .finalMessage();
       } catch (error) {
-        // Transport, auth or rate-limit failure. The detail goes to the server
-        // log via `cause`; the user gets a sentence they can act on.
-        throw new AIExtractionError(
-          "Vezri couldn't reach the service that reads plans. Please try again in a moment.",
-          error,
-        );
+        // Classified, and logged with its status. The detail stays server-side
+        // on `cause` and in the log line; the user gets a sentence naming what
+        // to do about THIS failure rather than one covering four of them.
+        throw classify(error, request.action);
       }
 
       // A refusal is a 200 with no usable output — check before reading content.

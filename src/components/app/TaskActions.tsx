@@ -62,47 +62,39 @@ export default function TaskActions({
     router.refresh();
   }
 
+  const secondary =
+    "rounded-pill border border-blush bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-blush-wash disabled:opacity-60";
+
   return (
     <div className="mt-4">
-      <div className="flex flex-wrap gap-2">
+      {/* Not five equal choices. Done is the primary and sits alone; the rest
+          are a quieter group. "I'm stuck" stays a directly tappable button at
+          every width and is never behind a menu — §13 makes it the most
+          important interaction in the product, and burying it would remove the
+          feature rather than tidy it. Wraps on narrow screens; never scrolls
+          sideways. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
         <button
           type="button"
           onClick={() => checkIn("done")}
           disabled={busy !== null}
-          className="rounded-pill bg-berry px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-berry-deep disabled:opacity-60"
+          className="rounded-pill bg-berry px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-berry-deep disabled:opacity-60"
         >
           {busy === "done" ? "Saving…" : "Done"}
         </button>
-        <button
-          type="button"
-          onClick={() => checkIn("partial")}
-          disabled={busy !== null}
-          className="rounded-pill border border-blush px-4 py-2 text-sm font-semibold text-berry transition-colors hover:bg-blush-wash disabled:opacity-60"
-        >
+
+        <span aria-hidden="true" className="hidden h-6 w-px bg-blush sm:block" />
+
+        <button type="button" onClick={() => checkIn("partial")} disabled={busy !== null} className={`${secondary} text-berry`}>
           Partly
         </button>
-        <button
-          type="button"
-          onClick={() => checkIn("snoozed")}
-          disabled={busy !== null}
-          className="rounded-pill border border-blush px-4 py-2 text-sm font-semibold text-berry transition-colors hover:bg-blush-wash disabled:opacity-60"
-        >
+        <button type="button" onClick={() => checkIn("snoozed")} disabled={busy !== null} className={`${secondary} text-berry`}>
           Snooze
         </button>
-        <button
-          type="button"
-          onClick={() => checkIn("not_done")}
-          disabled={busy !== null}
-          className="rounded-pill border border-blush px-4 py-2 text-sm font-semibold text-mauve transition-colors hover:bg-blush-wash disabled:opacity-60"
-        >
+        <button type="button" onClick={() => checkIn("not_done")} disabled={busy !== null} className={`${secondary} text-mauve`}>
           Not done
         </button>
-        <button
-          type="button"
-          onClick={() => checkIn("stuck")}
-          disabled={busy !== null}
-          className="rounded-pill border border-blush px-4 py-2 text-sm font-semibold text-mauve transition-colors hover:bg-blush-wash disabled:opacity-60"
-        >
+        <button type="button" onClick={() => checkIn("stuck")} disabled={busy !== null} className={`${secondary} text-mauve`}>
           I&rsquo;m stuck
         </button>
       </div>
