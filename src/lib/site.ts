@@ -104,3 +104,23 @@ export const FOUNDER = { name: "Nikita Tejwani", title: `Founder, ${BRAND}` } as
  */
 export const FOUNDER_PORTRAIT_SRC =
   process.env.NEXT_PUBLIC_FOUNDER_PORTRAIT ?? "/brand/founder.webp";
+
+/**
+ * The My Story hero — the wide founder-and-Vezri artwork (owner decision,
+ * 2026-09-08: it replaces the portrait rather than joining it).
+ *
+ * Null until the asset is actually in public/brand/. The page renders the
+ * original portrait layout while this is null, so production never points at a
+ * file that does not exist. Activating it is one line: give this a default of
+ * "/brand/story.webp", or set NEXT_PUBLIC_STORY_IMAGE.
+ *
+ * Note for whoever lands the asset: PRD §30.6 says not to use a *generated*
+ * founder portrait, and the square founder.webp it replaces is recorded as the
+ * real approved photograph. Retiring that in favour of illustrated artwork is
+ * the owner's call, made explicitly — this comment is the record of it, not an
+ * objection.
+ */
+export const STORY_IMAGE_SRC = process.env.NEXT_PUBLIC_STORY_IMAGE ?? null;
+
+/** Alt text for the hero. Describes what is in it, per §30.11. */
+export const STORY_IMAGE_ALT = `${FOUNDER.name} with ${MASCOT}, the ${BRAND} falcon archer, drawing a bow toward a target`;
