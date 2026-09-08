@@ -9,6 +9,7 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
       "next/link": fileURLToPath(new URL("./tests/mocks/next-link.tsx", import.meta.url)),
       "next/image": fileURLToPath(new URL("./tests/mocks/next-image.tsx", import.meta.url)),
+      "server-only": fileURLToPath(new URL("./tests/mocks/server-only.ts", import.meta.url)),
     },
   },
   test: { globals: true, environment: "node", include: ["tests/**/*.test.{ts,tsx}"] },

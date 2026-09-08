@@ -19,7 +19,7 @@ export const SUPABASE_ANON_KEY = read("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 export const SUPABASE_SERVICE_ROLE_KEY = read("SUPABASE_SERVICE_ROLE_KEY");
 
 export const ANTHROPIC_API_KEY = read("ANTHROPIC_API_KEY");
-export const AI_MODEL = read("AI_MODEL") ?? "claude-sonnet-4-5";
+export const AI_MODEL = read("AI_MODEL") ?? "claude-opus-5";
 
 export const SITE_URL = read("NEXT_PUBLIC_SITE_URL") ?? "https://www.vezriqen.com";
 
