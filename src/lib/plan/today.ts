@@ -1,4 +1,4 @@
-import { formatDay } from "@/lib/time";
+import { dayKey, daysBetweenDays, formatDay } from "@/lib/time";
 
 /**
  * Choosing what to show on Today (PRD §17, §4.5).
@@ -35,39 +35,6 @@ export type CandidateTask = {
 
 export type TodayCard = CandidateTask & { urgencyScore: number; reason: string };
 
-/** Milestone heading plus the cards under it, for the grouped Today list. */
-export type TodayGroup = {
-  milestoneTitle: string | null;
-  goalId: string;
-  goalLabel: string | null;
-  cards: TodayCard[];
-};
-
-/**
- * Groups the day's cards under the milestone each belongs to.
- *
- * Order is preserved: the cards are already in priority order and grouping
- * must not reshuffle what the user is meant to do first.
- */
-export function groupByMilestone(cards: TodayCard[]): TodayGroup[] {
-  const groups: TodayGroup[] = [];
-  for (const card of cards) {
-    const key = card.milestoneTitle ?? null;
-    const existing = groups.find((g) => g.milestoneTitle === key && g.goalId === card.goalId);
-    if (existing) {
-      existing.cards.push(card);
-      continue;
-    }
-    groups.push({
-      milestoneTitle: key,
-      goalId: card.goalId,
-      goalLabel: card.goalLabel ?? null,
-      cards: [card],
-    });
-  }
-  return groups;
-}
-
 const DAY = 24 * 60 * 60 * 1000;
 
 const OPEN_STATUSES = new Set(["not_started", "in_progress", "unconfirmed", "partial"]);
@@ -91,6 +58,11 @@ const OPEN_STATUSES = new Set(["not_started", "in_progress", "unconfirmed", "par
  */
 function neutralReason(task: CandidateTask): string {
   if (task.rationale?.trim()) return task.rationale.trim();
+  return typeReason(task);
+}
+
+/** The fallback half of the above, for callers that punctuate it themselves. */
+function typeReason(task: CandidateTask): string {
   switch (task.taskType) {
     case "external_dependency":
       return "someone else has to act before this can close";
@@ -236,4 +208,262 @@ export function selectWaitingOn(candidates: CandidateTask[]): CandidateTask[] {
     .filter((t) => OPEN_STATUSES.has(t.status) && t.blockedOnPerson)
     .sort((a, b) => a.priority - b.priority)
     .slice(0, 5);
+}
+
+/* ---------------------------------------------------------------------------
+ * Today, grouped by goal (PRD §17, §4.5, §4.6)
+ *
+ * selectTodayCards above answers "what are the two or three things that matter
+ * most across everything?" and caps at three, full stop. That is still the
+ * right answer for a reminder or an email, where there is room for one list.
+ *
+ * The screen asks a slightly different question once someone has four goals:
+ * three cards can leave a goal with two overdue items completely unmentioned,
+ * and §18 cares about that. Grouping by goal answers both — each goal gets its
+ * own section, and §4.5's cap is applied WITHIN a section (three rows visible,
+ * the rest behind "Show N more") rather than across the screen. What is never
+ * done is showing a goal's whole backlog: eligibility below is the same
+ * "needs attention today" filter, not a list of everything open.
+ * ------------------------------------------------------------------------- */
+
+/** Why a task is on Today at all. The badge and the ordering both come from it. */
+export type TodayUrgency = "overdue" | "due_today" | "start_today" | "needs_answer";
+
+export type TodayTask = CandidateTask & {
+  urgency: TodayUrgency;
+  /** Whole days past the date that made it overdue. 0 for everything else. */
+  daysOverdue: number;
+  /**
+   * The badge, in sentence case. "30 days overdue".
+   *
+   * §4.6 — a fact, not a verdict. It is uppercased by CSS at the call site so
+   * the string a screen reader receives is still a sentence, and so the copy
+   * here can be read as the product's tone rather than as shouting.
+   */
+  badge: string;
+  /** The date shown on the row, and which date it is. */
+  date: Date | null;
+  dateKind: "deadline" | "start_by" | null;
+  reason: string;
+};
+
+export type TodayGoalSection = {
+  goalId: string;
+  /** Raw naming columns; the page resolves them through lib/goal-label. */
+  goalLabel: string | null;
+  goalTitle: string;
+  tasks: TodayTask[];
+  overdueCount: number;
+  dueTodayCount: number;
+  startTodayCount: number;
+  needsAnswerCount: number;
+  /** "2 overdue · 3 due today" — the section header's status pill. */
+  summary: string;
+};
+
+const RANK: Record<TodayUrgency, number> = {
+  overdue: 0,
+  due_today: 1,
+  start_today: 2,
+  needs_answer: 3,
+};
+
+function overdueBadge(days: number): string {
+  if (days <= 0) return "Overdue";
+  return days === 1 ? "1 day overdue" : `${days} days overdue`;
+}
+
+/**
+ * Is this task one of today's, and if so why?
+ *
+ * Returns null for work that merely exists. §17: "Do not default to a giant
+ * backlog" — a task due in three weeks has no business on this screen, however
+ * important it is.
+ */
+function classify(
+  task: CandidateTask,
+  todayKey: string,
+  timeZone: string | undefined,
+): Pick<TodayTask, "urgency" | "daysOverdue" | "badge" | "date" | "dateKind"> | null {
+  const deadlineKey = task.deadline ? dayKey(task.deadline, timeZone) : null;
+  const startKey = task.startBy ? dayKey(task.startBy, timeZone) : null;
+
+  if (deadlineKey && deadlineKey < todayKey) {
+    const days = daysBetweenDays(deadlineKey, todayKey);
+    return {
+      urgency: "overdue",
+      daysOverdue: days,
+      badge: overdueBadge(days),
+      date: task.deadline,
+      dateKind: "deadline",
+    };
+  }
+
+  // Past its start-by date but not yet past its deadline. Still overdue as a
+  // fact — the work was meant to be under way — and the row says "Start by"
+  // rather than "Due", so the badge is not claiming a missed deadline.
+  if (startKey && startKey < todayKey) {
+    const days = daysBetweenDays(startKey, todayKey);
+    return {
+      urgency: "overdue",
+      daysOverdue: days,
+      badge: overdueBadge(days),
+      date: task.startBy,
+      dateKind: "start_by",
+    };
+  }
+
+  if (deadlineKey === todayKey) {
+    return {
+      urgency: "due_today",
+      daysOverdue: 0,
+      badge: "Due today",
+      date: task.deadline,
+      dateKind: "deadline",
+    };
+  }
+
+  if (startKey === todayKey) {
+    return {
+      urgency: "start_today",
+      daysOverdue: 0,
+      badge: "Start today",
+      date: task.startBy,
+      dateKind: "start_by",
+    };
+  }
+
+  // §12 — a checkpoint that came due and was never answered is missing
+  // information, and Vezri may not assume it went well. It needs a person
+  // today even when no date says so.
+  if (task.awaitingCheckpoint) {
+    return {
+      urgency: "needs_answer",
+      daysOverdue: 0,
+      badge: "Needs an answer",
+      date: task.deadline ?? task.startBy,
+      dateKind: task.deadline ? "deadline" : task.startBy ? "start_by" : null,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Today's work, split into one section per goal.
+ *
+ * Sections are ordered by what is most pressing inside them, not by when the
+ * goal was created: the goal with two things a month overdue goes first.
+ * Within a section the order is overdue, then due today, then start today,
+ * then unanswered — and older slippage before newer.
+ */
+export function selectTodayByGoal(
+  candidates: CandidateTask[],
+  options: { now?: Date; timeZone?: string } = {},
+): TodayGoalSection[] {
+  const now = options.now ?? new Date();
+  const { timeZone } = options;
+  const todayKey = dayKey(now, timeZone);
+
+  const sections = new Map<string, TodayGoalSection>();
+
+  for (const task of candidates) {
+    // Same two exclusions as the cross-goal selection: closed work, and work
+    // that is not in the user's control (§13 keeps that in its own section so
+    // it neither disappears nor occupies a slot the user can act on).
+    if (!OPEN_STATUSES.has(task.status) || task.blockedOnPerson) continue;
+
+    const classified = classify(task, todayKey, timeZone);
+    if (!classified) continue;
+
+    let section = sections.get(task.goalId);
+    if (!section) {
+      section = {
+        goalId: task.goalId,
+        goalLabel: task.goalLabel ?? null,
+        goalTitle: task.goalTitle,
+        tasks: [],
+        overdueCount: 0,
+        dueTodayCount: 0,
+        startTodayCount: 0,
+        needsAnswerCount: 0,
+        summary: "",
+      };
+      sections.set(task.goalId, section);
+    }
+
+    section.tasks.push({ ...task, ...classified, reason: taskContextLine(task) });
+  }
+
+  const ordered = [...sections.values()];
+
+  for (const section of ordered) {
+    section.tasks.sort(
+      (a, b) =>
+        RANK[a.urgency] - RANK[b.urgency] ||
+        b.daysOverdue - a.daysOverdue ||
+        a.priority - b.priority ||
+        a.title.localeCompare(b.title),
+    );
+    section.overdueCount = section.tasks.filter((t) => t.urgency === "overdue").length;
+    section.dueTodayCount = section.tasks.filter((t) => t.urgency === "due_today").length;
+    section.startTodayCount = section.tasks.filter((t) => t.urgency === "start_today").length;
+    section.needsAnswerCount = section.tasks.filter((t) => t.urgency === "needs_answer").length;
+    section.summary = sectionSummary(section);
+  }
+
+  // Sections are ordered by their own first row, using the SAME comparator the
+  // rows inside them use. That is what makes the page read in one order: the
+  // first row of the first section is the most overdue thing on the screen.
+  // Ordering sections by the cross-goal urgency score instead was tried and
+  // produced exactly the sentence a reader would call a bug — a goal whose
+  // worst item was twelve days late sitting above one thirty days late,
+  // because that scorer weights a missed start date and a missed deadline on
+  // different curves.
+  return ordered.sort(
+    (a, b) =>
+      RANK[a.tasks[0]!.urgency] - RANK[b.tasks[0]!.urgency] ||
+      b.tasks[0]!.daysOverdue - a.tasks[0]!.daysOverdue ||
+      b.overdueCount - a.overdueCount ||
+      b.tasks.length - a.tasks.length,
+  );
+}
+
+/**
+ * The section header's status pill. "2 overdue · 3 due today"
+ *
+ * Counts only. A collapsed section must still say what is inside it, or
+ * collapsing hides work rather than tidying it.
+ */
+export function sectionSummary(section: {
+  overdueCount: number;
+  dueTodayCount: number;
+  startTodayCount: number;
+  needsAnswerCount: number;
+}): string {
+  const parts = [
+    section.overdueCount > 0 ? `${section.overdueCount} overdue` : null,
+    section.dueTodayCount > 0 ? `${section.dueTodayCount} due today` : null,
+    section.startTodayCount > 0 ? `${section.startTodayCount} to start today` : null,
+    section.needsAnswerCount > 0 ? `${section.needsAnswerCount} needs an answer` : null,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+/**
+ * The one line of context under a task title: why this matters.
+ *
+ * Never the urgency — the badge and the date already say that, and a row
+ * reading "30 DAYS OVERDUE / … / Because the deadline was 10 Aug" says the
+ * same thing three times, which is how a factual screen turns into a nagging
+ * one (§4.6). This is the task's own rationale where the model wrote one, and
+ * a sentence about the KIND of work where it did not.
+ *
+ * A rationale is used verbatim apart from a full stop. §7 forbids re-wording
+ * what the model actually said about a plan, so it is punctuated, not edited.
+ */
+export function taskContextLine(task: CandidateTask): string {
+  const rationale = task.rationale?.trim();
+  if (rationale) return /[.!?]$/.test(rationale) ? rationale : `${rationale}.`;
+  return `Because ${typeReason(task)}.`;
 }

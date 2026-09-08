@@ -1,126 +1,100 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { createClient, getUser } from "@/lib/supabase/server";
 import { loadToday } from "@/lib/plan/load-today";
-import { groupByMilestone } from "@/lib/plan/today";
-import TodayList, { type TodayGroupView } from "@/components/app/TodayList";
-import { VezriPoseImage } from "@/components/VezriWorking";
-import { POSE_FOR } from "@/lib/vezri-poses";
+import { selectTodayByGoal } from "@/lib/plan/today";
+import TodayScreen from "@/components/app/TodayScreen";
+import type { TodaySectionView } from "@/components/app/TodayGoalSections";
+import { goalIconFor } from "@/lib/goal-icons";
 import { goalLabel } from "@/lib/goal-label";
-import { APP_ROUTES } from "@/lib/routes";
+import { formatDueDate, formatWeekdayDate } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Today", robots: { index: false } };
 
 /**
- * PRD §17. Up to three priority actions across ALL goals, then what is waiting
- * on someone else. Deliberately not a backlog, and deliberately cross-goal:
- * §4 exists to avoid the task-manager experience of checking each goal in turn
- * to find out what today needs.
+ * PRD §17 — what needs you today, grouped by the goal it belongs to.
+ *
+ * §4.5 caps the day at three priority actions, and the cap is now applied per
+ * goal section rather than across the whole screen: three cards in total meant
+ * a second goal with two things a month overdue could go entirely unmentioned,
+ * which §18 and §15 both care about. Nothing else about the cap moves — a
+ * section shows three rows and says how many more there are, and only work
+ * that needs attention TODAY is eligible at all. It stays cross-goal on one
+ * screen, which is the whole reason §4 gives for not making someone open each
+ * goal in turn.
+ *
+ * The markup lives in TodayScreen. This is the query and the mapping.
  */
 export default async function TodayPage() {
+  const now = new Date();
   const user = await getUser();
   const supabase = await createClient();
-  const { cards, waitingOn, backlog, goals, reminderFor } = await loadToday({ supabase });
+
+  const [{ waitingOn, backlog, goals, tasks, reminderFor }, { data: profile }] = await Promise.all([
+    loadToday({ supabase, now }),
+    supabase.from("profiles").select("timezone").maybeSingle(),
+  ]);
+
+  // The stored zone when there is one; the browser corrects the heading after
+  // mount when there is not (see TodayDate).
+  const timeZone = profile?.timezone ?? undefined;
 
   const firstName =
     ((user?.user_metadata?.full_name ?? user?.user_metadata?.name) as string | undefined)?.split(
       " ",
     )[0] ?? null;
 
-  const groups: TodayGroupView[] = groupByMilestone(cards).map((group, index) => ({
-    key: `${group.goalId}-${index}`,
-    goalId: group.goalId,
-    goalLabel: goalLabel({ short_label: group.goalLabel, normalized_goal: group.cards[0]?.goalTitle }),
-    milestoneTitle: group.milestoneTitle,
-    cards: group.cards.map((card) => ({
-      id: card.id,
-      goalId: card.goalId,
-      goalLabel: goalLabel({ short_label: card.goalLabel, normalized_goal: card.goalTitle }),
-      milestoneTitle: card.milestoneTitle ?? null,
-      title: card.title,
-      reason: card.reason,
-      estimatedMinutes: card.estimatedMinutes,
-      startBy: card.startBy?.toISOString() ?? null,
-      deadline: card.deadline?.toISOString() ?? null,
-      reminderId: reminderFor?.get(card.id) ?? null,
-      waitingOn: card.externalPartyName ?? null,
-    })),
-  }));
+  const naming = new Map(goals.map((goal) => [goal.id, goal]));
+
+  const sections: TodaySectionView[] = selectTodayByGoal(tasks, { now, timeZone }).map(
+    (section) => {
+      const goal = naming.get(section.goalId) ?? {
+        short_label: section.goalLabel,
+        normalized_goal: section.goalTitle,
+      };
+      return {
+        goalId: section.goalId,
+        goalLabel: goalLabel(goal),
+        icon: goalIconFor(goal),
+        summary: section.summary,
+        tasks: section.tasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          reason: task.reason,
+          badge: task.badge,
+          urgency: task.urgency,
+          // Formatted here, where the user's zone is known. The client
+          // component never does date arithmetic.
+          dateLabel:
+            task.urgency === "due_today"
+              ? "Due today"
+              : task.urgency === "start_today"
+                ? "Start today"
+                : task.date
+                  ? `${task.dateKind === "start_by" ? "Start by" : "Due"} ${formatDueDate(task.date, { now, timeZone })}`
+                  : null,
+          estimatedMinutes: task.estimatedMinutes,
+          milestoneTitle: task.milestoneTitle ?? null,
+          reminderId: reminderFor?.get(task.id) ?? null,
+        })),
+      };
+    },
+  );
 
   return (
-    <div className="shell max-w-3xl py-12 lg:py-16">
-      <div className="flex items-start justify-between gap-6">
-        <div className="min-w-0">
-          <h1 className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-            {firstName ? `Good morning, ${firstName}` : "Good morning"}
-          </h1>
-
-          {/* §4 — said ONCE, here, rather than on every card. Three cards each
-              repeating "this should already have started" is the same reproach
-              three times over, which is how a screen full of overdue work ends
-              up reading as a telling-off. Neutral wording, and no exclamation. */}
-          {backlog.planBehind && (
-            <p className="mt-3 text-[1.02rem] leading-relaxed text-mauve">
-              {backlog.behindCount} things are past the date Vezri worked back to. That happens
-              — here are the ones worth picking up first.
-            </p>
-          )}
-        </div>
-
-        {/* Calm and neutral: a cheerful mascot on a screen full of overdue work
-            is the wrong note, and §13 rules out the confused pose here too. */}
-        <VezriPoseImage
-          pose={POSE_FOR.goalHealth}
-          alt=""
-          className="h-16 w-auto shrink-0 sm:h-24"
-        />
-      </div>
-
-      {goals.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-blush bg-white p-6 shadow-soft">
-          <p className="text-mauve">You don&rsquo;t have an active goal yet.</p>
-          <Link href={APP_ROUTES.start} className="btn-primary mt-5">
-            Bring Vezri a plan
-          </Link>
-        </div>
-      ) : (
-        <>
-          <h2 className="mt-8 text-lg font-semibold text-ink">Your most important moves today</h2>
-          <TodayList groups={groups} />
-
-          {/* §13 — work that isn't in the user's control, kept visible but out
-              of the priority slots. A name only: §3 puts invitations, accounts
-              for other people and assignment in Phase 2. */}
-          {waitingOn.length > 0 && (
-            <section aria-labelledby="waiting-heading" className="mt-12">
-              <h2 id="waiting-heading" className="text-lg font-semibold text-ink">
-                Waiting on someone else
-              </h2>
-              <ul className="mt-3 space-y-2">
-                {waitingOn.map((task) => (
-                  <li key={task.id} className="rounded-xl bg-blush-wash px-5 py-4">
-                    <p className="font-medium text-ink">{task.title}</p>
-                    {task.externalPartyName && (
-                      <p className="mt-0.5 text-sm text-mauve">
-                        <span className="font-medium">Waiting on:</span> {task.externalPartyName}
-                      </p>
-                    )}
-                    <p className="mt-0.5 text-sm text-mauve-light">
-                      {goalLabel({ short_label: task.goalLabel, normalized_goal: task.goalTitle })}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          <p className="mt-12">
-            <Link href={APP_ROUTES.goals} className="btn-secondary">
-              See all your goals
-            </Link>
-          </p>
-        </>
-      )}
-    </div>
+    <TodayScreen
+      dateLabel={formatWeekdayDate(now, timeZone)}
+      dateIsTrusted={Boolean(profile?.timezone)}
+      firstName={firstName}
+      hasGoals={goals.length > 0}
+      behindCount={backlog.behindCount}
+      planBehind={backlog.planBehind}
+      sections={sections}
+      waitingOn={waitingOn.map((task) => ({
+        id: task.id,
+        title: task.title,
+        waitingOn: task.externalPartyName ?? null,
+        goalLabel: goalLabel({ short_label: task.goalLabel, normalized_goal: task.goalTitle }),
+      }))}
+    />
   );
 }

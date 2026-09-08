@@ -153,3 +153,85 @@ export function formatQuietHours(
   const window = `${formatHour(startHour)} to ${formatHour(endHour)}`;
   return timeZone ? `${window}, ${timeZoneLabel(timeZone)}` : window;
 }
+
+/**
+ * A calendar day in a given zone, as "YYYY-MM-DD".
+ *
+ * The unit Today actually reasons in. "Overdue" and "due today" are questions
+ * about the DAY a moment falls on for the person reading the screen, not about
+ * elapsed milliseconds: a task due at 11pm is not "due tomorrow" for someone
+ * six hours east, and subtracting timestamps says it is. en-CA because it is
+ * the one common locale that formats ISO order natively.
+ */
+export function dayKey(value: Date | string | number, timeZone?: string): string {
+  const date = toDate(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
+}
+
+/**
+ * Whole days from one day key to another. Positive when `to` is later.
+ *
+ * Parsed as UTC midnights deliberately: both sides are already resolved to a
+ * calendar day, so this is date arithmetic and never crosses a DST boundary.
+ */
+export function daysBetweenDays(from: string, to: string): number {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(end)) return 0;
+  return Math.round((end - start) / 86_400_000);
+}
+
+/**
+ * The date heading on Today. "Tuesday, 9 Sep 2026"
+ *
+ * en-GB with the rest of the product's dates rather than the mockup's
+ * "Sep 9, 2025": a screen that says "Tuesday, Sep 9" above a row that says
+ * "Due 10 Aug" is two date conventions in one viewport. The weekday and the
+ * year are the parts the heading adds.
+ */
+export function formatWeekdayDate(value: Date | string | number, timeZone?: string): string {
+  const date = toDate(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
+}
+
+/** A date that always carries its year. "31 Dec 2026" */
+export function formatDayYear(value: Date | string | number, timeZone?: string): string {
+  const date = toDate(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
+}
+
+/**
+ * A due date, carrying the year only when it is not the current one.
+ *
+ * Today can show work that slipped past a year boundary, where "10 Aug" is
+ * genuinely ambiguous. Everything inside the current year stays short.
+ */
+export function formatDueDate(
+  value: Date | string | number,
+  options: { now?: Date; timeZone?: string } = {},
+): string {
+  const date = toDate(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const { now = new Date(), timeZone } = options;
+  const sameYear = dayKey(date, timeZone).slice(0, 4) === dayKey(now, timeZone).slice(0, 4);
+  return sameYear ? formatDay(date, timeZone) : formatDayYear(date, timeZone);
+}

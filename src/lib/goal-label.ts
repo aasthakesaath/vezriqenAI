@@ -52,3 +52,31 @@ export function goalStatement(goal: GoalNaming | null | undefined): string {
     goal?.normalized_goal?.trim() || goal?.user_goal_text?.trim() || "Your goal"
   );
 }
+
+/**
+ * One line about the goal, for a card that already carries the name.
+ *
+ * The first sentence of the statement, and only if it is short enough to be a
+ * line. §6 requires the approved SMART statement be preserved and §7 forbids
+ * an inference standing in for a stated fact, so this never rewrites or
+ * summarises: it either shows the opening sentence the user approved, or it
+ * shows nothing and the card is one line shorter. Returning null rather than
+ * a truncated clause is the point — "Reach 1450+ on the SAT by March 14 so
+ * that I can…" cut mid-thought reads as broken rendering.
+ */
+const SUMMARY_LIMIT = 110;
+
+export function goalSummary(goal: GoalNaming | null | undefined): string | null {
+  const source = goal?.normalized_goal?.trim() || goal?.user_goal_text?.trim();
+  if (!source) return null;
+
+  // First sentence, or the whole thing when there is only one.
+  const sentence = (source.match(/^[^.!?]+[.!?]?/)?.[0] ?? source).trim();
+  if (sentence.length > SUMMARY_LIMIT) return null;
+
+  // Never a restatement of the name that already sits above it.
+  const label = goalLabel(goal).replace(/…$/, "").trim().toLowerCase();
+  if (label && sentence.toLowerCase() === label) return null;
+
+  return sentence.replace(/[.,;:]$/, "");
+}

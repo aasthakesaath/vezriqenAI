@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import VezriWorking, { VezriPoseImage } from "@/components/VezriWorking";
 import { POSE_FOR, poseAlt, type VezriPose } from "@/lib/vezri-poses";
-import TodayList from "@/components/app/TodayList";
+import TodayGoalSections from "@/components/app/TodayGoalSections";
 import { UNDERSTANDING_STEPS, AUDIT_STEPS, COACH_STEPS } from "@/lib/app-copy";
 
 /**
@@ -141,7 +141,7 @@ describe("the confused pose stays off paths where nothing went wrong", () => {
 
   it("never appears on a good empty state", () => {
     // "Nothing needs you today" is being caught up, not a problem.
-    const caughtUp = html(<TodayList groups={[]} />);
+    const caughtUp = html(<TodayGoalSections sections={[]} />);
     expect(usesPose(caughtUp, "confused")).toBe(false);
     expect(caughtUp).toContain("Nothing needs you today");
   });

@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { loadGoalSnapshot } from "@/lib/health/load";
-import { VezriPoseImage } from "@/components/VezriWorking";
-import { POSE_FOR } from "@/lib/vezri-poses";
-import { HEALTH_LABELS } from "@/lib/app-copy";
-import { goalLabel } from "@/lib/goal-label";
-import { APP_ROUTES, goalPath } from "@/lib/routes";
-import { formatDay } from "@/lib/time";
+import GoalsScreen, { type GoalCardView } from "@/components/app/GoalsScreen";
+import { goalIconFor } from "@/lib/goal-icons";
+import { goalLabel, goalSummary } from "@/lib/goal-label";
+import { goalTaskCounts } from "@/lib/plan/goal-progress";
+import { formatDayYear } from "@/lib/time";
 
 export const metadata: Metadata = { title: "My Goals", robots: { index: false } };
 
@@ -19,107 +17,82 @@ export const metadata: Metadata = { title: "My Goals", robots: { index: false } 
  * task-manager experience §4 exists to avoid. This answers a different
  * question — how is each goal doing — and links into the detail.
  *
+ * Two numbers appear on every card and they are deliberately not the same
+ * number. The ring counts finished tasks and says so. The pill is Goal Health,
+ * which §15 computes from eight deterministic factors including critical-path
+ * delay, dependencies and capacity, and which §4.10 requires NOT move just
+ * because someone ticked off easy work. A goal at 80% of tasks with its one
+ * blocking dependency untouched reads "80% of tasks done · At Risk", and both
+ * halves of that are true.
+ *
  * Works with one goal or with six; nothing here assumes a plural.
  */
 export default async function GoalsPage() {
+  const now = new Date();
   const supabase = await createClient();
 
-  const { data: goals } = await supabase
-    .from("goals")
-    .select("id, short_label, normalized_goal, user_goal_text, target_date, status")
-    .in("status", ["active", "achieved"])
-    .order("created_at", { ascending: true });
+  const [{ data: goals }, { data: profile }] = await Promise.all([
+    supabase
+      .from("goals")
+      .select("id, short_label, normalized_goal, user_goal_text, target_date, status")
+      .in("status", ["active", "achieved"])
+      .order("created_at", { ascending: true }),
+    supabase.from("profiles").select("timezone").maybeSingle(),
+  ]);
 
   const rows = goals ?? [];
-  const snapshots = await Promise.all(
-    rows.map(async (goal) => {
-      const snapshot = await loadGoalSnapshot({ supabase, goalId: goal.id });
-      const [{ data: milestones }, { data: nextTask }] = await Promise.all([
-        supabase.from("milestones").select("id, status").eq("goal_id", goal.id),
+  const goalIds = rows.map((goal) => goal.id);
+  const timeZone = profile?.timezone ?? undefined;
+
+  // Batched rather than per goal: the counts and the next milestone are one
+  // query each for the whole page, not two more per card.
+  const [{ data: allTasks }, { data: allMilestones }] = goalIds.length
+    ? await Promise.all([
+        supabase.from("tasks").select("goal_id, status, deadline, start_by").in("goal_id", goalIds),
         supabase
-          .from("tasks")
-          .select("title")
-          .eq("goal_id", goal.id)
-          .in("status", ["not_started", "in_progress", "unconfirmed", "partial"])
-          .order("priority", { ascending: true })
-          .limit(1)
-          .maybeSingle(),
-      ]);
-      const all = milestones ?? [];
+          .from("milestones")
+          .select("goal_id, title, status, target_date, sort_order")
+          .in("goal_id", goalIds)
+          .order("sort_order", { ascending: true }),
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const cards: GoalCardView[] = await Promise.all(
+    rows.map(async (goal) => {
+      const health = (await loadGoalSnapshot({ supabase, goalId: goal.id, now }))?.health ?? null;
+
       return {
-        goal,
-        health: snapshot?.health ?? null,
-        done: all.filter((m) => m.status === "done").length,
-        total: all.length,
-        nextAction: nextTask?.title ?? null,
+        id: goal.id,
+        label: goalLabel(goal),
+        summary: goalSummary(goal),
+        icon: goalIconFor(goal),
+        health: health?.status ?? null,
+        targetDate: goal.target_date ? formatDayYear(goal.target_date, timeZone) : null,
+        // The next thing this goal is working towards: earliest unfinished
+        // milestone by date, falling back to the plan's own order for the ones
+        // extraction gave no date.
+        nextMilestone:
+          (allMilestones ?? [])
+            .filter((m) => m.goal_id === goal.id && m.status !== "done")
+            .sort((a, b) => {
+              if (a.target_date && b.target_date) return a.target_date < b.target_date ? -1 : 1;
+              if (a.target_date) return -1;
+              if (b.target_date) return 1;
+              return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+            })[0]?.title ?? null,
+        counts: goalTaskCounts(
+          (allTasks ?? [])
+            .filter((task) => task.goal_id === goal.id)
+            .map((task) => ({
+              status: task.status,
+              deadline: task.deadline ? new Date(task.deadline) : null,
+              startBy: task.start_by ? new Date(task.start_by) : null,
+            })),
+          { now, timeZone },
+        ),
       };
     }),
   );
 
-  return (
-    <div className="shell max-w-3xl py-12 lg:py-16">
-      <div className="flex items-start justify-between gap-6">
-        <div className="min-w-0">
-          <h1 className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">My Goals</h1>
-          <p className="mt-2 text-mauve">Where each one stands, and what it needs next.</p>
-        </div>
-        <VezriPoseImage
-          pose={POSE_FOR.goalHealth}
-          alt=""
-          className="h-16 w-auto shrink-0 sm:h-24"
-        />
-      </div>
-
-      {rows.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-blush bg-white p-6 shadow-soft">
-          <div className="flex items-center gap-4">
-            <VezriPoseImage pose="reading" alt="" className="h-20 w-auto shrink-0" />
-            <p className="text-mauve">
-              No goals yet. Bring Vezri a plan and it becomes something you can follow.
-            </p>
-          </div>
-          <Link href={APP_ROUTES.start} className="btn-primary mt-5">
-            Bring Vezri a plan
-          </Link>
-        </div>
-      ) : (
-        <ul className="mt-8 space-y-4">
-          {snapshots.map(({ goal, health, done, total, nextAction }) => (
-            <li key={goal.id}>
-              <Link
-                href={goalPath(goal.id)}
-                className="block rounded-2xl border border-blush bg-white p-6 shadow-soft transition-colors hover:bg-blush-wash"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  {/* The six-word label, never the SMART statement — that is
-                      ~60 words and lives on the detail page. */}
-                  <h2 className="text-lg font-semibold text-ink">{goalLabel(goal)}</h2>
-                  {health && (
-                    <span className="shrink-0 rounded-pill bg-blush-light px-3 py-1 text-sm font-medium text-berry">
-                      {HEALTH_LABELS[health.status]}
-                    </span>
-                  )}
-                </div>
-
-                {nextAction && (
-                  <p className="mt-2 text-[0.98rem] text-mauve">
-                    <span className="font-medium text-ink">Next:</span> {nextAction}
-                  </p>
-                )}
-
-                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-mauve-light">
-                  {total > 0 && (
-                    <span>
-                      {done} of {total} milestones complete
-                    </span>
-                  )}
-                  {goal.target_date && <span>By {formatDay(goal.target_date)}</span>}
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+  return <GoalsScreen goals={cards} />;
 }
