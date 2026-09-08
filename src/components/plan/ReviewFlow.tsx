@@ -18,6 +18,43 @@ type Phase = "reading" | "target" | "plan" | "error";
  */
 const EXTRACTION_TIMEOUT_MS = 330_000;
 
+/** One NDJSON line from the extract route. */
+type ExtractEvent =
+  | { type: "progress"; phase: "reading" }
+  | { type: "progress"; phase: "structure_done"; milestones: number }
+  | { type: "progress"; phase: "tasks"; completed: number; total: number }
+  | { type: "progress"; phase: "tasks_done"; tasks: number }
+  | { type: "progress"; phase: "target" }
+  | { type: "error"; status: number; error: string }
+  | {
+      type: "done";
+      clarifying_questions?: string[];
+      missing_information?: string[];
+    };
+
+/**
+ * Plain language for a thing that has happened.
+ *
+ * "6 of 9" is real progress — it counts passes that actually completed — which
+ * is why it is allowed here while a percentage or a countdown is not.
+ */
+function describeProgress(event: Extract<ExtractEvent, { type: "progress" }>): string {
+  switch (event.phase) {
+    case "reading":
+      return "Reading your plan";
+    case "structure_done":
+      return event.milestones === 1
+        ? "Found 1 milestone"
+        : `Found ${event.milestones} milestones`;
+    case "tasks":
+      return `Working through your milestones — ${event.completed} of ${event.total}`;
+    case "tasks_done":
+      return "Working out the timing";
+    case "target":
+      return "Writing your target";
+  }
+}
+
 /**
  * Drives PRD §5 Steps 3 → 5 → 6.
  *
@@ -42,6 +79,15 @@ export default function ReviewFlow({
   const [phase, setPhase] = useState<Phase>(needsExtraction ? "reading" : "target");
   const [error, setError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<string[]>([]);
+  /**
+   * The stage line, set ONLY from a server event.
+   *
+   * Never a timer. The old component advanced through its whole stage list on
+   * a 6-second interval, so the screen read "Reading your plan" then "Working
+   * out the timing" then "nearly there" during a period in which no extract
+   * request existed at all. If the server is not reporting, this does not move.
+   */
+  const [stage, setStage] = useState<string>(UNDERSTANDING_STEPS[0]);
   // React 18 StrictMode double-invokes effects in development; without this the
   // extraction would run twice and bill twice.
   const started = useRef(false);
@@ -62,26 +108,67 @@ export default function ReviewFlow({
         method: "POST",
         signal: abort.signal,
       });
-      const payload = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        clarifying_questions?: string[];
-        missing_information?: string[];
-      };
-      if (!response.ok) {
-        // `||`, not `??`: an empty-string error from the server is nullish-
-        // coalesced straight through, and VezriWorking treats "" as "no error"
-        // — which renders the waiting state forever on a failed request.
+
+      if (!response.ok || !response.body) {
+        // A non-2xx never reaches the stream: read it as JSON and stop.
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        // `||`, not `??`: an empty-string error is nullish-coalesced straight
+        // through, and an empty message used to render as "no error at all".
         setError(payload.error || "Vezri couldn't read that plan.");
         setPhase("error");
         return;
       }
-      setQuestions([
-        ...(payload.clarifying_questions ?? []),
-        ...(payload.missing_information ?? []),
-      ].slice(0, 3));
-      // Pull the freshly written target and plan from the server.
-      router.refresh();
-      setPhase("target");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let settled = false;
+
+      const handle = (line: string) => {
+        if (!line.trim()) return;
+        let event: ExtractEvent;
+        try {
+          event = JSON.parse(line) as ExtractEvent;
+        } catch {
+          return; // a partial line; the buffer will complete it
+        }
+
+        if (event.type === "progress") {
+          setStage(describeProgress(event));
+          return;
+        }
+        if (event.type === "error") {
+          settled = true;
+          setError(event.error || "Vezri couldn't read that plan.");
+          setPhase("error");
+          return;
+        }
+        if (event.type === "done") {
+          settled = true;
+          setQuestions(
+            [...(event.clarifying_questions ?? []), ...(event.missing_information ?? [])].slice(0, 3),
+          );
+          router.refresh();
+          setPhase("target");
+        }
+      };
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) handle(line);
+      }
+      handle(buffer);
+
+      if (!settled) {
+        // The stream ended without a verdict — the function was killed, or a
+        // proxy cut it. Silence is not success.
+        setError("Vezri stopped partway through reading your plan. Nothing was saved — try again.");
+        setPhase("error");
+      }
     } catch (caught) {
       setError(
         (caught as Error)?.name === "AbortError"
@@ -108,7 +195,7 @@ export default function ReviewFlow({
     return (
       <VezriWorking
         className="mt-8"
-        stages={UNDERSTANDING_STEPS}
+        stages={[stage]}
         pose={POSE_FOR.readingPlan}
         error={phase === "error" ? error : null}
         errorPose={POSE_FOR.failure}

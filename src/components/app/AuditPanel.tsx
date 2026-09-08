@@ -55,7 +55,7 @@ export default function AuditPanel({ goalId }: { goalId: string }) {
       {(busy || error) && (
         <VezriWorking
           className="mt-5"
-          stages={AUDIT_STEPS}
+          stages={[AUDIT_STEPS[0]]}
           pose={POSE_FOR.audit}
           error={error}
           errorPose={POSE_FOR.failure}

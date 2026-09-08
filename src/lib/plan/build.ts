@@ -87,6 +87,14 @@ async function mapLimit<T, R>(
   return results;
 }
 
+/** A thing that has actually happened, for the waiting screen to report. */
+export type ExtractionProgress =
+  | { phase: "reading" }
+  | { phase: "structure_done"; milestones: number }
+  | { phase: "tasks"; completed: number; total: number }
+  | { phase: "tasks_done"; tasks: number }
+  | { phase: "target" };
+
 /**
  * Reads a plan document into the full ExtractedPlan shape, in as many passes as
  * the document needs. Callers downstream are unchanged — they still receive one
@@ -98,8 +106,21 @@ export async function extractPlanInPasses(options: {
   userGoalText: string | null;
   today: string;
   image?: { data: string; mediaType: "image/jpeg" | "image/png" };
+  /**
+   * Called as each pass actually finishes.
+   *
+   * The waiting screen used to advance its own stage text on a 6-second
+   * timer, so it displayed "Reading your plan" through to "nearly there"
+   * whether or not a request had even been sent — and it did exactly that
+   * during a window in which the server logs show no extract request at all.
+   * Stage text has to come from work that happened.
+   */
+  onProgress?: (event: ExtractionProgress) => void;
 }): Promise<{ plan: ExtractedPlan; modelVersion: string; passes: number }> {
-  const { provider, documentText, userGoalText, today, image } = options;
+  const { provider, documentText, userGoalText, today, image, onProgress } = options;
+  const report = (event: ExtractionProgress) => onProgress?.(event);
+
+  report({ phase: "reading" });
   const promptInput = { documentText, userGoalText, today };
   const withVisionNote = (prompt: string) =>
     image ? `${prompt}\n\n${VISION_EXTRACTION_NOTE}` : prompt;
@@ -114,6 +135,7 @@ export async function extractPlanInPasses(options: {
     effort: "high",
   });
   const structure = structureResult.data;
+  report({ phase: "structure_done", milestones: structure.milestones.length });
 
   // ---- Pass 2..n: tasks ---------------------------------------------------
   const titles = structure.milestones.map((m) => m.title);
@@ -137,9 +159,17 @@ export async function extractPlanInPasses(options: {
       effort: "high",
     });
 
+  let finishedBatches = 0;
+  const batchDone = () => {
+    finishedBatches += 1;
+    report({ phase: "tasks", completed: finishedBatches, total: batches.length });
+  };
+
   const batchResults = await mapLimit(batches, TASK_PASS_CONCURRENCY, async (titlesForBatch, i) => {
     try {
-      return (await runBatch(titlesForBatch, i)).data.tasks;
+      const tasks = (await runBatch(titlesForBatch, i)).data.tasks;
+      batchDone();
+      return tasks;
     } catch (error) {
       // One dense batch truncating must not lose the rest of the plan. Split it
       // and retry; if a single milestone still will not fit, drop that
@@ -150,6 +180,7 @@ export async function extractPlanInPasses(options: {
           console.warn(
             `[ai] tasks for "${titlesForBatch[0]}" do not fit in one response; skipping that milestone's tasks.`,
           );
+          batchDone();
           return [];
         }
         throw error;
@@ -163,6 +194,7 @@ export async function extractPlanInPasses(options: {
           throw retryError;
         }
       });
+      batchDone();
       return retried.flat();
     }
   });
@@ -179,6 +211,8 @@ export async function extractPlanInPasses(options: {
     tasks.push(task);
     if (tasks.length >= MAX_TASKS) break;
   }
+
+  report({ phase: "tasks_done", tasks: tasks.length });
 
   return {
     plan: { ...structure, tasks },
@@ -225,6 +259,8 @@ export async function buildPlanForGoal(options: {
   userId: string;
   goalId: string;
   today?: string;
+  /** Reported as each pass completes, so the UI can show real progress. */
+  onProgress?: (event: ExtractionProgress) => void;
 }): Promise<BuildResult> {
   const { supabase, userId, goalId } = options;
   const today = options.today ?? formatDate(new Date());
@@ -268,10 +304,13 @@ export async function buildPlanForGoal(options: {
     userGoalText: goal.user_goal_text,
     today,
     image,
+    onProgress: options.onProgress,
   });
 
   // Never trust an origin="explicit" claim; check the quote is really there.
   const plan = verifyPlanProvenance(extraction.plan, documentText);
+
+  options.onProgress?.({ phase: "target" });
 
   const smartResult = await provider.generateStructured({
     action: "smart_target",

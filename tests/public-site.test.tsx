@@ -250,8 +250,10 @@ describe("Vezri working state (shared model-call loading component)", () => {
     expect(working).toContain('aria-busy="true"');
   });
 
-  it("opens on the first stage, in plain language", () => {
-    expect(text(<VezriWorking stages={UNDERSTANDING_STEPS} />)).toContain(
+  it("shows the stage it was given, in plain language", () => {
+    // One stage, because the caller owns progression now — the component has
+    // no clock of its own to walk a list with.
+    expect(text(<VezriWorking stages={[UNDERSTANDING_STEPS[0]]} />)).toContain(
       UNDERSTANDING_STEPS[0],
     );
     for (const jargon of [
@@ -265,7 +267,7 @@ describe("Vezri working state (shared model-call loading component)", () => {
       "execution profile",
       "lead-time",
     ]) {
-      expect(text(<VezriWorking stages={UNDERSTANDING_STEPS} />).toLowerCase()).not.toContain(
+      expect(text(<VezriWorking stages={[UNDERSTANDING_STEPS[0]]} />).toLowerCase()).not.toContain(
         jargon.toLowerCase(),
       );
     }

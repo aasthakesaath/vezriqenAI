@@ -195,9 +195,8 @@ export default function ExecutionBlockCoach({
       {thinking && (
         <VezriWorking
           className="mt-4 p-6"
-          stages={COACH_STEPS}
+          stages={[COACH_STEPS[0]]}
           pose={POSE_FOR.coach}
-          stageMs={4000}
           note="Almost there."
           error={error}
           // Not the confused pose, even though this is a real failure. The

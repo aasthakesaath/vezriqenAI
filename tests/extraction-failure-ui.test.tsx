@@ -60,10 +60,24 @@ describe("the client cannot wait forever", () => {
   });
 
   it("routes every non-2xx to the error state", () => {
-    expect(source).toMatch(/if \(!response\.ok\)/);
+    expect(source).toMatch(/!response\.ok/);
     // `||`, not `??` — the distinction that kept the screen spinning on "".
     expect(source).toMatch(/payload\.error \|\| /);
     expect(source).not.toMatch(/payload\.error \?\? /);
+  });
+
+  it("treats a stream that ends without a verdict as a failure", () => {
+    // Silence is not success: if the function is killed or a proxy cuts the
+    // response, the screen must not sit on the last stage it happened to see.
+    expect(source).toMatch(/if \(!settled\)/);
+    expect(source).toMatch(/stopped partway through/);
+  });
+
+  it("takes its stage text from server events and never from a clock", () => {
+    expect(source).toContain("describeProgress");
+    expect(source).toMatch(/setStage\(describeProgress\(event\)\)/);
+    // No timer anywhere in the waiting path.
+    expect(source).not.toMatch(/setInterval|setTimeout\(\s*\(\)\s*=>\s*setStage/);
   });
 
   it("tells a timeout apart from a dead connection", () => {
@@ -96,6 +110,26 @@ describe("the waiting copy is honest about how long this takes", () => {
     expect(text(markup)).not.toMatch(/\d+\s*%/);
     expect(text(markup)).not.toMatch(/\d+\s*(seconds|minutes|s left|remaining)/i);
     expect(markup).not.toContain('role="progressbar"');
+  });
+});
+
+describe("no component advances a stage on a timer", () => {
+  const component = readFileSync("src/components/VezriWorking.tsx", "utf8");
+
+  it("VezriWorking has no stage clock at all", () => {
+    // It used to walk its stage list every 6 seconds, which is how the screen
+    // reported "Reading your plan" through to "nearly there" during a window
+    // in which the server logs show no request was ever made.
+    expect(component).not.toMatch(/setIndex/);
+    expect(component).not.toMatch(/stageMs/);
+    const advancing = component.match(/setTimeout\([^)]*setIndex/g) ?? [];
+    expect(advancing).toEqual([]);
+  });
+
+  it("shows the stage it was given, and only that", () => {
+    const markup = renderToStaticMarkup(<VezriWorking stages={["Reading your plan"]} />);
+    expect(text(markup)).toContain("Reading your plan");
+    expect(text(markup)).not.toContain("Working out the timing");
   });
 });
 

@@ -82,10 +82,22 @@ describe("every API route is either authenticated or deliberately public (PRD §
     "src/app/api/feedback/route.ts": "public feedback form (PRD §30.8)",
     "src/app/api/reminders/redeem/route.ts": "the signed single-use token is the credential (§12, §23)",
     "src/app/api/cron/reminders/route.ts": "scheduled job, guarded by CRON_SECRET",
+    "src/app/api/health/schema/route.ts":
+      "reports whether the DB matches the code — table and column NAMES only, " +
+      "all of which are already public in supabase/migrations/, and never a row. " +
+      "A health check that needs a credential is one nobody runs.",
   };
 
   it("finds the API routes", () => {
     expect(routeFiles.length).toBeGreaterThan(8);
+  });
+
+  it("the public health route exposes structure only, never rows", () => {
+    const source = read(join(SRC, "app", "api", "health", "schema", "route.ts"));
+    // It may name tables and columns; it may not read from one.
+    expect(source).not.toMatch(/\.from\(/);
+    expect(source).not.toMatch(/\.select\(/);
+    expect(source).toContain("verifySchema");
   });
 
   it("checks the session on every route not explicitly listed as public", () => {

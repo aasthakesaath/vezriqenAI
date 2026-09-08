@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { buildPlanForGoal } from "@/lib/plan/build";
 import { AIExtractionError } from "@/lib/ai";
 import { AI_CONFIGURED, ConfigurationError, SUPABASE_CONFIGURED } from "@/lib/env";
+import { assertSchemaReady, describeSchemaGaps } from "@/lib/db/verify-schema";
 
 export const runtime = "nodejs";
 /** Extraction is a long reasoning call over a whole document. */
@@ -27,25 +28,88 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
-  try {
-    const result = await buildPlanForGoal({ supabase, userId: user.id, goalId: id });
-    return NextResponse.json({
-      goal_id: id,
-      milestones: result.milestoneCount,
-      tasks: result.taskCount,
-      clarifying_questions: result.plan.clarifying_questions,
-      missing_information: result.smart.missing_information,
-    });
-  } catch (error) {
-    if (error instanceof ConfigurationError) {
-      return NextResponse.json({ error: error.message }, { status: 503 });
-    }
-    if (error instanceof AIExtractionError) {
-      return NextResponse.json({ error: error.message }, { status: 422 });
-    }
+  // BEFORE the model runs, not after. A migration written but never applied
+  // cost a whole extraction: every pass completed, then the final write failed
+  // with "Could not find the 'short_label' column of 'goals' in the schema
+  // cache" and the work was discarded. Checking first turns two minutes of
+  // billed work thrown away into a fast 503 that names the column.
+  const schemaGap = await assertSchemaReady(supabase);
+  if (schemaGap) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Couldn't read that plan." },
-      { status: 500 },
+      {
+        error:
+          "Vezriqen's database is behind its code, so a plan can't be saved yet. " +
+          "This needs a migration applied — it isn't something to retry.",
+        detail: describeSchemaGaps(schemaGap),
+      },
+      { status: 503 },
     );
   }
+
+  // NDJSON, one line per thing that has actually happened, then a final line
+  // carrying the result or the error.
+  //
+  // The screen used to advance its own stage text on a timer, so it showed
+  // "Reading your plan" through to "nearly there" whether or not a request had
+  // been sent — and it did exactly that during a window in which the server
+  // logs show no extract request at all. Every line below corresponds to a
+  // pass that finished. If nothing is happening, nothing is reported.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (payload: unknown) => {
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+        } catch {
+          // The client navigated away mid-extraction. The work continues and
+          // is still written; there is simply nobody listening.
+        }
+      };
+
+      try {
+        const result = await buildPlanForGoal({
+          supabase,
+          userId: user.id,
+          goalId: id,
+          onProgress: (event) => send({ type: "progress", ...event }),
+        });
+        send({
+          type: "done",
+          goal_id: id,
+          milestones: result.milestoneCount,
+          tasks: result.taskCount,
+          clarifying_questions: result.plan.clarifying_questions,
+          missing_information: result.smart.missing_information,
+        });
+      } catch (error) {
+        const status =
+          error instanceof ConfigurationError ? 503 : error instanceof AIExtractionError ? 422 : 500;
+        // The response is already 200 with an open stream by the time this
+        // runs, so the status travels IN the final line. The client treats a
+        // failed line exactly as it treats a non-2xx.
+        send({
+          type: "error",
+          status,
+          error:
+            error instanceof ConfigurationError || error instanceof AIExtractionError
+              ? error.message
+              : error instanceof Error
+                ? error.message
+                : "Couldn't read that plan.",
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      // Vercel and any intermediate proxy must not buffer this, or every line
+      // arrives at once at the end and the progress is worthless.
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

@@ -156,7 +156,7 @@ describe("alt text describes the state, not the bird", () => {
   });
 
   it("is decorative inside the working card, where the stage line already says it", () => {
-    const markup = html(<VezriWorking stages={UNDERSTANDING_STEPS} pose="reading" />);
+    const markup = html(<VezriWorking stages={[UNDERSTANDING_STEPS[0]]} pose="reading" />);
     expect(markup).toContain('alt=""');
     expect(markup).toContain('aria-hidden="true"');
     // The state is still announced — just as text, in the live region.

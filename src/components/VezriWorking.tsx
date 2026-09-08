@@ -68,14 +68,20 @@ export function VezriPoseImage({
 
 export interface VezriWorkingProps {
   /**
-   * What Vezri reports doing, in order. The last line holds until the work
-   * finishes. Plain language only — the user never sees the machinery.
+   * What Vezri is doing RIGHT NOW — the last entry is displayed.
+   *
+   * There is no timer. This component used to walk the list on a 6-second
+   * interval, which meant the screen reported "Reading your plan" then
+   * "Working out the timing" then "nearly there" during a window in which the
+   * server logs show no request had been made at all. A stage is a claim about
+   * work, so only the caller — which knows what the server actually said — may
+   * change it.
+   *
+   * Plain language only; the user never sees the machinery.
    */
   stages: readonly string[];
   /** Which drawing fits the work. Name it from POSE_FOR, not by hand. */
   pose?: VezriPose;
-  /** Milliseconds each stage holds before the next one. */
-  stageMs?: number;
   /** Set when the work failed. Replaces the waiting state with a plain message. */
   error?: string | null;
   /**
@@ -117,22 +123,13 @@ function noteFor(elapsedMs: number): string {
 export default function VezriWorking({
   stages,
   pose = "thinking",
-  stageMs = 6000,
   error = null,
   errorPose = "confused",
   onRetry,
   note,
   className = "",
 }: VezriWorkingProps) {
-  const [index, setIndex] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    if (error) return;
-    if (index >= stages.length - 1) return;
-    const timer = setTimeout(() => setIndex((i) => i + 1), stageMs);
-    return () => clearTimeout(timer);
-  }, [index, stages.length, stageMs, error]);
 
   // Drives the note only. Not a countdown and not shown to the user as a
   // number — the wait has no honest estimate, and inventing one is the thing
@@ -189,7 +186,7 @@ export default function VezriWorking({
       </span>
       <div className="space-y-1.5">
         <p className="text-[0.98rem] font-semibold text-ink">
-          {stages[Math.min(index, stages.length - 1)]}
+          {stages[stages.length - 1] ?? "Working"}
           <span aria-hidden="true">&hellip;</span>
         </p>
         <p className="text-sm text-mauve-light">{note ?? noteFor(elapsed)}</p>
