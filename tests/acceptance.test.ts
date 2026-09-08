@@ -77,6 +77,7 @@ describe("§25.A — seven-day morning routine", () => {
       now: NOW,
       targetDate: new Date("2027-03-08T00:00:00.000Z"),
       activatedAt: new Date("2027-03-01T00:00:00.000Z"),
+      planStart: null,
       milestones: [{ weight: 3, status: "not_started", targetDate: null }],
       tasks: [
         { status: "not_done", priority: 3, deadline: null, startBy: null, estimatedMinutes: 20 },
@@ -90,13 +91,24 @@ describe("§25.A — seven-day morning routine", () => {
       ],
       unansweredCheckpoints: [],
       overdueDependencies: 0,
+      dependenciesDue: 0,
+      checkpointsDue: 0,
       evidenceRequired: 0,
       evidenceProvided: 0,
       availableMinutes: null,
     });
 
+    // Five of six mornings done, one coarse milestone not yet ticked, no
+    // dated work and no check-in due. The old formula read that as 0/100 and
+    // "Off track" — total failure — because milestone completion was the only
+    // measurable thing and a single milestone is all-or-nothing.
+    //
+    // The honest reading is not a better number. It is no number: Vezri does
+    // not have enough to judge this goal, and says so.
     expect(health.status).not.toBe("off_track");
-    expect(health.score).toBeGreaterThan(40);
+    expect(health.status).not.toBe("at_risk");
+    expect(health.status).toBe("insufficient_data");
+    expect(health.score).toBeNull();
   });
 
   /** "Vezri proposes the smallest recovery plan." */
@@ -305,6 +317,7 @@ describe("§25.D — three-year company goal", () => {
       now: NOW,
       targetDate: new Date("2030-03-01T00:00:00.000Z"),
       activatedAt: new Date("2027-01-01T00:00:00.000Z"),
+      planStart: null,
       milestones: [
         { weight: 5, status: "not_started", targetDate: new Date("2030-01-01T00:00:00.000Z") },
         { weight: 3, status: "done", targetDate: new Date("2027-06-01T00:00:00.000Z") },
@@ -312,6 +325,8 @@ describe("§25.D — three-year company goal", () => {
       tasks: [],
       unansweredCheckpoints: [],
       overdueDependencies: 0,
+      dependenciesDue: 0,
+      checkpointsDue: 0,
       evidenceRequired: 0,
       evidenceProvided: 0,
       availableMinutes: null,
@@ -326,17 +341,30 @@ describe("§25.D — three-year company goal", () => {
     const base = {
       now: NOW,
       activatedAt: new Date("2027-01-01T00:00:00.000Z"),
-      milestones: [{ weight: 3, status: "not_started", targetDate: null }],
+      planStart: null,
+      // Part-done, so the urgency multiplier has something to multiply: it
+      // scales the score, and a goal pinned at zero scales to zero either way.
+      milestones: [
+        { weight: 3, status: "done", targetDate: null },
+        { weight: 3, status: "not_started", targetDate: null },
+      ],
       tasks: [],
       unansweredCheckpoints: [],
       overdueDependencies: 0,
+      dependenciesDue: 0,
+      // One check-in has come due and was answered, so there is a second kind
+      // of evidence and a score exists. This test is about the urgency
+      // multiplier; the evidence threshold has its own tests.
+      checkpointsDue: 1,
       evidenceRequired: 0,
       evidenceProvided: 0,
       availableMinutes: null,
     };
     const distant = calculateHealth({ ...base, targetDate: new Date("2030-03-01T00:00:00.000Z") });
     const soon = calculateHealth({ ...base, targetDate: new Date("2027-03-10T00:00:00.000Z") });
-    expect(distant.score).toBeGreaterThan(soon.score);
+    expect(distant.score).not.toBeNull();
+    expect(soon.score).not.toBeNull();
+    expect(distant.score!).toBeGreaterThan(soon.score!);
   });
 });
 

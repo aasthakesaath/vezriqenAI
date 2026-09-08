@@ -63,7 +63,12 @@ export default async function GoalsPage() {
 
   const cards: GoalCardView[] = await Promise.all(
     rows.map(async (goal) => {
-      const health = (await loadGoalSnapshot({ supabase, goalId: goal.id, now }))?.health ?? null;
+      // persist: false — the list shows a badge per goal, and recording every
+      // one of them on every visit would be an extra read and write per card
+      // for a screen nobody is studying. The goal's own page records it.
+      const health =
+        (await loadGoalSnapshot({ supabase, goalId: goal.id, now, persist: false }))?.health ??
+        null;
 
       return {
         id: goal.id,

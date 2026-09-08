@@ -125,6 +125,12 @@ export const HEALTH_LABELS = {
   at_risk: "At Risk",
   off_track: "Off Track",
   achieved: "Achieved",
+  /**
+   * Not a grade. §15's score needs evidence from more than one direction, and
+   * until it has that the honest answer is that Vezri cannot say yet — not a
+   * low number, and certainly not the 100 an empty goal used to score.
+   */
+  insufficient_data: "Not enough to judge yet",
 } as const;
 
 /**

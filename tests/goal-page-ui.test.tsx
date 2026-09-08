@@ -245,6 +245,7 @@ describe("the sidebar", () => {
     now: new Date("2026-09-08T12:00:00Z"),
     targetDate: new Date("2026-12-31T00:00:00Z"),
     activatedAt: new Date("2026-01-01T00:00:00Z"),
+    planStart: new Date("2026-01-01T00:00:00Z"),
     milestones: [
       { weight: 3, status: "done", targetDate: new Date("2026-03-01T00:00:00Z") },
       { weight: 3, status: "not_started", targetDate: new Date("2026-07-01T00:00:00Z") },
@@ -259,7 +260,11 @@ describe("the sidebar", () => {
       },
     ],
     unansweredCheckpoints: [],
+    // One checkpoint has come due and was answered, one dependency's date has
+    // passed — the denominators the factors need before they can vote.
+    checkpointsDue: 1,
     overdueDependencies: 1,
+    dependenciesDue: 1,
     evidenceRequired: 0,
     evidenceProvided: 0,
     availableMinutes: null,

@@ -32,7 +32,7 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
-  const snapshot = await loadGoalSnapshot({ supabase, goalId: id });
+  const snapshot = await loadGoalSnapshot({ supabase, goalId: id, persist: false });
   if (!snapshot) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
   const goalTitle =

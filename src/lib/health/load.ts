@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { calculateHealth, type HealthInputs, type HealthResult } from "./score";
+import { calculateHealth, timelineElapsed, type HealthInputs, type HealthResult } from "./score";
 import { detectGaps, selectTopGaps, type AuditInputs, type Gap } from "./audit";
 
 /**
@@ -43,10 +43,81 @@ function toDate(value: string | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * Writes the score AND the numbers it came from (§15).
+ *
+ * §15 requires the inputs to be stored alongside the result, and they were not:
+ * the score was computed on every page render and thrown away. When a goal read
+ * 73 and the same formula on the same rows later gave 48, there was no way to
+ * recover which state produced the 73 — that gap is the bug this closes.
+ *
+ * Deduplicated on (score, status) against the most recent row, so a table that
+ * would otherwise gain a row per page view only gains one when something
+ * actually changed. Best-effort: a goal page must not fail to render because
+ * its audit trail could not be written.
+ */
+async function recordHealthSnapshot(options: {
+  supabase: SupabaseClient;
+  goalId: string;
+  health: HealthResult;
+  inputs: HealthInputs;
+}): Promise<void> {
+  const { supabase, goalId, health, inputs } = options;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { data: last } = await supabase
+    .from("goal_audits")
+    .select("health_score, health_status")
+    .eq("goal_id", goalId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (last?.health_score === health.score && last?.health_status === health.status) return;
+
+  const { error } = await supabase.from("goal_audits").insert({
+    user_id: user.id,
+    goal_id: goalId,
+    health_score: health.score,
+    health_status: health.status,
+    // The factor table as rendered, plus the raw counts behind it — enough to
+    // reproduce the arithmetic later without the rows it was read from.
+    health_inputs: {
+      factors: health.factors,
+      computed_at: inputs.now.toISOString(),
+      plan_start: inputs.planStart?.toISOString() ?? null,
+      activated_at: inputs.activatedAt?.toISOString() ?? null,
+      target_date: inputs.targetDate?.toISOString() ?? null,
+      elapsed: timelineElapsed(inputs),
+      milestones_total: inputs.milestones.length,
+      milestone_weight: inputs.milestones.reduce((sum, m) => sum + m.weight, 0),
+      milestone_weight_done: inputs.milestones
+        .filter((m) => m.status === "done")
+        .reduce((sum, m) => sum + m.weight, 0),
+      tasks_open: inputs.tasks.filter((t) => t.status !== "done").length,
+      checkpoints_due: inputs.checkpointsDue,
+      checkpoints_unanswered: inputs.unansweredCheckpoints.length,
+      dependencies_due: inputs.dependenciesDue,
+      dependencies_overdue: inputs.overdueDependencies,
+    },
+  });
+
+  if (error) console.warn(`[health] could not record the score for ${goalId}: ${error.message}`);
+}
+
 export async function loadGoalSnapshot(options: {
   supabase: SupabaseClient;
   goalId: string;
   now?: Date;
+  /**
+   * The audit route writes its own richer row, so it turns this off rather than
+   * recording the same computation twice.
+   */
+  persist?: boolean;
 }): Promise<GoalSnapshot | null> {
   const { supabase, goalId } = options;
   const now = options.now ?? new Date();
@@ -71,12 +142,14 @@ export async function loadGoalSnapshot(options: {
         .from("tasks")
         .select("id, title, status, priority, deadline, start_by, estimated_minutes, milestone_id")
         .eq("goal_id", goalId),
+      // Every checkpoint that has come DUE, answered or not. The unanswered
+      // ones are picked out below: a factor needs its denominator, or "none
+      // unanswered" and "none asked" become the same number.
       supabase
         .from("reminders")
         .select("id, task_id, response, response_required, scheduled_at, tasks!inner(goal_id, title, priority)")
         .eq("tasks.goal_id", goalId)
         .eq("response_required", true)
-        .is("response", null)
         .lte("scheduled_at", now.toISOString()),
       supabase
         .from("execution_blocks")
@@ -96,10 +169,16 @@ export async function loadGoalSnapshot(options: {
   const joined = <T>(value: T | T[] | null): T | null =>
     Array.isArray(value) ? (value[0] ?? null) : value;
 
-  const reminderFor = new Map<string, string>();
-  for (const row of reminders ?? []) reminderFor.set(row.task_id, row.id);
+  const checkpointsDue = (reminders ?? []).length;
+  // Answered ones are still fetched, because the factor needs its denominator
+  // — but only an UNANSWERED checkpoint is something a task card can offer to
+  // answer, so this map is built from those alone.
+  const openCheckpoints = (reminders ?? []).filter((row) => row.response === null);
 
-  const unansweredCheckpoints = (reminders ?? []).map((row) => {
+  const reminderFor = new Map<string, string>();
+  for (const row of openCheckpoints) reminderFor.set(row.task_id, row.id);
+
+  const unansweredCheckpoints = openCheckpoints.map((row) => {
     const task = joined(row.tasks as unknown as TaskJoin | TaskJoin[]);
     return {
       taskTitle: task?.title ?? "",
@@ -130,10 +209,27 @@ export async function loadGoalSnapshot(options: {
     return { taskTitle: task?.title ?? "", category: row.category as string };
   });
 
+  // The earliest date the PLAN names, from every dated thing in it. This is
+  // the clock the milestone factor runs on: a plan written for an August start
+  // and uploaded in September is a month in, not starting fresh.
+  const planDates = [
+    ...milestoneRows.map((m) => toDate(m.target_date)),
+    ...taskRows.map((t) => toDate(t.start_by)),
+    ...taskRows.map((t) => toDate(t.deadline)),
+  ].filter((date): date is Date => date !== null);
+  const planStart = planDates.length
+    ? new Date(Math.min(...planDates.map((d) => d.getTime())))
+    : null;
+
+  const dependenciesDue = dependencyRows.filter(
+    (d) => d.externalParty && d.startBy && d.startBy.getTime() < now.getTime(),
+  ).length;
+
   const healthInputs: HealthInputs = {
     now,
     targetDate: toDate(goal.target_date),
     activatedAt: toDate(goal.activated_at),
+    planStart,
     milestones: milestoneRows.map((m) => ({
       weight: m.weight,
       status: m.status,
@@ -147,9 +243,11 @@ export async function loadGoalSnapshot(options: {
       estimatedMinutes: t.estimated_minutes,
     })),
     unansweredCheckpoints: unansweredCheckpoints.map((c) => ({ priority: c.priority })),
+    checkpointsDue,
     overdueDependencies: dependencyRows.filter(
       (d) => !d.resolved && d.externalParty && d.startBy && d.startBy.getTime() < now.getTime(),
     ).length,
+    dependenciesDue,
     // Evidence tracking lands with the deliverables surface; until then the
     // factor stays neutral rather than inventing a shortfall.
     evidenceRequired: 0,
@@ -158,6 +256,10 @@ export async function loadGoalSnapshot(options: {
   };
 
   const health = calculateHealth(healthInputs);
+
+  if (options.persist !== false) {
+    await recordHealthSnapshot({ supabase, goalId, health, inputs: healthInputs });
+  }
 
   const auditInputs: AuditInputs = {
     now,
