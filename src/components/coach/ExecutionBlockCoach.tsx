@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import VezriWorking from "@/components/VezriWorking";
+import VezriWorking, { POSE_FOR } from "@/components/VezriWorking";
 import { BLOCK_CHOICES, BLOCK_QUESTION, COACH_STEPS } from "@/lib/app-copy";
 
 type Proposal = {
@@ -196,9 +196,15 @@ export default function ExecutionBlockCoach({
         <VezriWorking
           className="mt-4 p-6"
           stages={COACH_STEPS}
+          pose={POSE_FOR.coach}
           stageMs={4000}
           note="Almost there."
           error={error}
+          // Not the confused pose, even though this is a real failure. The
+          // user has just told us they did not do something; §13 forbids guilt
+          // or disappointment framing, and a puzzled bird holding a question
+          // mark lands as being let down whatever the words say.
+          errorPose={POSE_FOR.coachFailure}
           onRetry={error ? () => void chooseBarrier(thinking) : undefined}
         />
       )}

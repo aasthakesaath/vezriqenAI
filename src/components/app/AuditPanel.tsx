@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import VezriWorking from "@/components/VezriWorking";
+import VezriWorking, { POSE_FOR } from "@/components/VezriWorking";
 import { AUDIT_LABEL, AUDIT_STEPS } from "@/lib/app-copy";
 
 type AuditGap = { title: string; explanation: string; category: string };
@@ -56,7 +56,9 @@ export default function AuditPanel({ goalId }: { goalId: string }) {
         <VezriWorking
           className="mt-5"
           stages={AUDIT_STEPS}
+          pose={POSE_FOR.audit}
           error={error}
+          errorPose={POSE_FOR.failure}
           onRetry={error ? () => void run() : undefined}
         />
       )}

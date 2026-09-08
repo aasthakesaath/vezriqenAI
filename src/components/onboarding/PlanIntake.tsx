@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { INTAKE_MODES, ONBOARDING_HEADING, type IntakeModeId } from "@/lib/app-copy";
 import { ACCEPT_ATTRIBUTE, MAX_FILE_BYTES, MIN_PLAN_CHARS, humanFileSize } from "@/lib/ingest/limits";
 import { goalReviewPath } from "@/lib/routes";
+import { POSE_FOR, VezriPoseImage } from "@/components/VezriWorking";
 
 /**
  * PRD §5 Step 2. Three ways in, one screen, no configuration.
@@ -20,16 +21,27 @@ export default function PlanIntake() {
   const [planText, setPlanText] = useState("");
   const [goalText, setGoalText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Whether the error is a REJECTION rather than a nudge.
+   *
+   * "Choose a file to upload" is a reminder that the form is incomplete;
+   * "that file is 25 MB" or a server refusal is Vezri turning something away.
+   * Only the second kind gets the confused pose — illustrating a missing
+   * field as a problem would spend the drawing on nothing.
+   */
+  const [rejected, setRejected] = useState(false);
   const [busy, setBusy] = useState(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
 
   function chooseMode(next: IntakeModeId) {
     setMode(next);
     setError(null);
+    setRejected(false);
   }
 
-  function fail(message: string) {
+  function fail(message: string, wasRejected = false) {
     setError(message);
+    setRejected(wasRejected);
     setBusy(false);
     // Move focus so a screen reader announces the problem immediately.
     requestAnimationFrame(() => errorRef.current?.focus());
@@ -42,7 +54,10 @@ export default function PlanIntake() {
     if (mode === "upload") {
       if (!file) return fail("Choose a file to upload.");
       if (file.size > MAX_FILE_BYTES) {
-        return fail(`That file is ${humanFileSize(file.size)}. The limit is ${humanFileSize(MAX_FILE_BYTES)}.`);
+        return fail(
+          `That file is ${humanFileSize(file.size)}. The limit is ${humanFileSize(MAX_FILE_BYTES)}.`,
+          true,
+        );
       }
     }
     if (mode === "paste" && planText.trim().length < MIN_PLAN_CHARS) {
@@ -54,6 +69,7 @@ export default function PlanIntake() {
 
     setBusy(true);
     setError(null);
+    setRejected(false);
 
     const body = new FormData();
     body.set("mode", mode);
@@ -68,11 +84,13 @@ export default function PlanIntake() {
         error?: string;
       };
       if (!response.ok || !payload.goal_id) {
-        return fail(payload.error ?? "Something went wrong. Try again.");
+        // The server is the authority on what it will accept (§7), so anything
+        // it refuses is a real rejection.
+        return fail(payload.error ?? "Something went wrong. Try again.", true);
       }
       router.push(goalReviewPath(payload.goal_id));
     } catch {
-      return fail("Couldn't reach Vezriqen. Check your connection and try again.");
+      return fail("Couldn't reach Vezriqen. Check your connection and try again.", true);
     }
   }
 
@@ -171,14 +189,30 @@ export default function PlanIntake() {
           </div>
 
           {error && (
-            <p
-              ref={errorRef}
-              tabIndex={-1}
-              role="alert"
-              className="rounded-xl bg-cream-light px-4 py-3 text-sm text-ink"
+            <div
+              className={
+                rejected
+                  ? "flex items-center gap-4 rounded-xl bg-cream-light px-4 py-3"
+                  : undefined
+              }
             >
-              {error}
-            </p>
+              {rejected && (
+                // Decorative: the alert beside it is the accessible message.
+                <VezriPoseImage pose={POSE_FOR.uploadRejected} alt="" className="h-20 w-auto" />
+              )}
+              <p
+                ref={errorRef}
+                tabIndex={-1}
+                role="alert"
+                className={
+                  rejected
+                    ? "text-sm text-ink"
+                    : "rounded-xl bg-cream-light px-4 py-3 text-sm text-ink"
+                }
+              >
+                {error}
+              </p>
+            </div>
           )}
 
           <button type="submit" disabled={busy} className="btn-primary disabled:opacity-60">

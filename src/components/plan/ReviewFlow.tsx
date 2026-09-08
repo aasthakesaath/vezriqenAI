@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import VezriWorking from "@/components/VezriWorking";
+import VezriWorking, { POSE_FOR } from "@/components/VezriWorking";
 import { UNDERSTANDING_STEPS } from "@/lib/app-copy";
 import TargetCard, { type TargetCardData } from "./TargetCard";
 import PlanConfirmation, { type PlanMilestone, type PlanTask } from "./PlanConfirmation";
@@ -80,7 +80,9 @@ export default function ReviewFlow({
       <VezriWorking
         className="mt-8"
         stages={UNDERSTANDING_STEPS}
+        pose={POSE_FOR.readingPlan}
         error={phase === "error" ? error : null}
+        errorPose={POSE_FOR.failure}
         onRetry={() => void extract()}
       />
     );

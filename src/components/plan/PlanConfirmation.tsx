@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import ProvenanceBadge from "./ProvenanceBadge";
 import { APP_ROUTES } from "@/lib/routes";
+import { POSE_FOR, VezriPoseImage } from "@/components/VezriWorking";
 
 export type PlanMilestone = {
   id: string;
@@ -171,12 +172,23 @@ export default function PlanConfirmation({
       )}
 
       {error && (
-        <p role="alert" className="rounded-xl bg-cream-light px-4 py-3 text-sm text-ink">
-          {error}
-        </p>
+        <div className="flex items-center gap-4 rounded-xl bg-cream-light px-4 py-3">
+          {/* Decorative: the alert beside it is the accessible message. */}
+          <VezriPoseImage pose={POSE_FOR.failure} alt="" className="h-20 w-auto" />
+          <p role="alert" className="text-sm text-ink">
+            {error}
+          </p>
+        </div>
       )}
 
       <div className="border-t border-blush pt-6">
+        {busy && (
+          <p role="status" className="mb-4 flex items-center gap-3 text-[0.98rem] text-mauve">
+            {/* Decorative: the line beside it is inside the live region. */}
+            <VezriPoseImage pose={POSE_FOR.buildingPlan} alt="" className="h-16 w-auto" />
+            Building your plan&hellip;
+          </p>
+        )}
         <button type="button" onClick={startGoal} disabled={busy} className="btn-primary disabled:opacity-60">
           {busy ? "Starting…" : "Start Goal"}
         </button>

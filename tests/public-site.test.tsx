@@ -282,8 +282,11 @@ describe("Vezri working state (shared model-call loading component)", () => {
     expect(working).not.toContain("aria-valuenow");
   });
 
-  it("uses the approved mascot asset and hides it from screen readers", () => {
-    expect(working).toContain("/brand/vezri.webp");
+  it("uses an approved mascot pose and hides it from screen readers", () => {
+    // Which pose belongs to which state is pinned in tests/vezri-poses.test.tsx;
+    // here it only matters that the card draws one and that it is decorative,
+    // because the stage line in the live region is the accessible message.
+    expect(working).toMatch(/vezri-(reading|thinking|confused)\.webp/);
     expect(working).toContain('alt=""');
   });
 
