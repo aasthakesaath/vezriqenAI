@@ -18,6 +18,20 @@
     font-family: var(--font-sans);
   }
 
+  /*
+   * `hidden` beats a display utility.
+   *
+   * Preflight sets [hidden]{display:none}, but `.flex{display:flex}` comes
+   * later in the same layer and wins, so a panel written as
+   * `hidden={!open} className="flex …"` renders open. That is not a styling
+   * nit: a disclosure whose closed state is visible is a disclosure that does
+   * not work, and it is invisible in review because the attribute is right
+   * there in the markup. One rule closes the whole class of bug.
+   */
+  [hidden] {
+    display: none !important;
+  }
+
   /* PRD §30.11 — visible focus states everywhere. */
   :focus-visible {
     @apply outline-none ring-2 ring-berry ring-offset-2 ring-offset-white rounded-sm;

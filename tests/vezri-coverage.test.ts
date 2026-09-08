@@ -25,7 +25,7 @@ const CARRIERS = [
   "LegalPage",
   "AuthPanel",
   "PlanIntake",
-  "TodayList",
+  "VezriNote",
   "AppHeader",
   "Wordmark",
   "ProgressPreview",

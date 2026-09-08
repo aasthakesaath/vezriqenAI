@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 export type CheckInState =
   | "done"
@@ -12,10 +12,24 @@ export type CheckInState =
   | "waiting_on_someone";
 
 /**
- * PRD §17 — the actions on a Today card.
+ * PRD §12 and §13 — what a person can say happened.
  *
- * "Not done" and "I'm stuck" hand off to the Execution Block Coach rather than
- * rescheduling, which is §13's central rule.
+ * The mockup this screen was rebuilt from offers Start / Done / I'm stuck /
+ * Edit. Three of those four are a different product:
+ *
+ *  - dropping "Not done" removes the Execution Block Coach. §13 makes it the
+ *    core differentiator, and `not_done` is one of the two states the check-in
+ *    API answers `needs_coach` for. A row that cannot say "not done" cannot
+ *    reach the coach, so the feature would be gone rather than moved.
+ *  - dropping "Partly" removes §12's partial completion, which is a distinct
+ *    fact about the work and not a rounding of done or not done.
+ *  - "Start" is a fifth state nothing records. It would write nothing, teach
+ *    the execution profile nothing, and change nothing on the screen.
+ *
+ * So: Done, Partly, Not done, I'm stuck at the top level, and Snooze behind a
+ * secondary control — it is the one response that reports nothing about the
+ * work, so it is the one that can afford a tap. "I'm stuck" is never behind
+ * that control at any width, for the same reason "Not done" is not dropped.
  */
 export default function TaskActions({
   taskId,
@@ -27,8 +41,10 @@ export default function TaskActions({
   onNeedsCoach: (taskId: string) => void;
 }) {
   const router = useRouter();
+  const id = useId();
   const [busy, setBusy] = useState<CheckInState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   async function checkIn(state: CheckInState) {
     setBusy(state);
@@ -63,41 +79,76 @@ export default function TaskActions({
   }
 
   const secondary =
-    "rounded-pill border border-blush bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-blush-wash disabled:opacity-60";
+    "rounded-pill border border-blush bg-white px-3.5 py-2 text-sm font-semibold transition-colors hover:bg-blush-wash disabled:opacity-60";
 
   return (
-    <div className="mt-4">
-      {/* Not five equal choices. Done is the primary and sits alone; the rest
-          are a quieter group. "I'm stuck" stays a directly tappable button at
-          every width and is never behind a menu — §13 makes it the most
-          important interaction in the product, and burying it would remove the
-          feature rather than tidy it. Wraps on narrow screens; never scrolls
-          sideways. */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+    <div>
+      {/* Wraps on narrow screens; never scrolls sideways. All four stay
+          tappable at 375px — the row reflows to two lines rather than hiding
+          the one that opens the coach. */}
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => checkIn("done")}
           disabled={busy !== null}
-          className="rounded-pill bg-berry px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-berry-deep disabled:opacity-60"
+          className="rounded-pill bg-berry px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-berry-deep disabled:opacity-60"
         >
           {busy === "done" ? "Saving…" : "Done"}
         </button>
-
-        <span aria-hidden="true" className="hidden h-6 w-px bg-blush sm:block" />
-
-        <button type="button" onClick={() => checkIn("partial")} disabled={busy !== null} className={`${secondary} text-berry`}>
+        <button
+          type="button"
+          onClick={() => checkIn("partial")}
+          disabled={busy !== null}
+          className={`${secondary} text-berry`}
+        >
           Partly
         </button>
-        <button type="button" onClick={() => checkIn("snoozed")} disabled={busy !== null} className={`${secondary} text-berry`}>
-          Snooze
-        </button>
-        <button type="button" onClick={() => checkIn("not_done")} disabled={busy !== null} className={`${secondary} text-mauve`}>
+        <button
+          type="button"
+          onClick={() => checkIn("not_done")}
+          disabled={busy !== null}
+          className={`${secondary} text-mauve`}
+        >
           Not done
         </button>
-        <button type="button" onClick={() => checkIn("stuck")} disabled={busy !== null} className={`${secondary} text-mauve`}>
+        <button
+          type="button"
+          onClick={() => checkIn("stuck")}
+          disabled={busy !== null}
+          className={`${secondary} text-mauve`}
+        >
           I&rsquo;m stuck
         </button>
+
+        {/* Not a three-dot menu: three dots promise an unknown list. This says
+            how many more there are by opening one visible button. */}
+        <button
+          type="button"
+          aria-expanded={moreOpen}
+          aria-controls={`${id}-more`}
+          onClick={() => setMoreOpen((value) => !value)}
+          className="rounded-pill px-2.5 py-2 text-sm font-medium text-mauve-light underline-offset-2 transition-colors hover:text-berry hover:underline"
+        >
+          {moreOpen ? "Fewer options" : "More"}
+        </button>
       </div>
+
+      <div id={`${id}-more`} hidden={!moreOpen} className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => checkIn("snoozed")}
+          disabled={busy !== null}
+          className={`${secondary} text-mauve`}
+        >
+          Snooze a day
+        </button>
+      </div>
+
+      {/* Polite, not assertive: saving is not an interruption. */}
+      <p aria-live="polite" className="sr-only">
+        {busy ? "Saving your check-in" : ""}
+      </p>
+
       {error && (
         <p role="alert" className="mt-2 text-sm text-berry">
           {error}

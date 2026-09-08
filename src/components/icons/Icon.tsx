@@ -33,7 +33,21 @@ export type IconName =
   | "chevronDown"
   | "document"
   | "health"
-  | "heart";
+  | "heart"
+  // Goal identity (see lib/goal-icon.ts) and the Today row markers. Added
+  // here rather than in a second file: two sets on one screen is two stroke
+  // weights and two optical sizes, which is exactly what "one icon set" is
+  // for. `goal` doubles as the neutral default for a goal nothing matches.
+  | "book"
+  | "graduation"
+  | "briefcase"
+  | "fitness"
+  | "rocket"
+  | "pen"
+  | "globe"
+  | "history"
+  | "list"
+  | "plus";
 
 const PATHS: Record<IconName, ReactNode> = {
   goal: (
@@ -84,6 +98,65 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   health: <path d="M2.75 12.25h4l2.25-5.5 3.75 11 2.5-5.5h5" />,
+  book: (
+    <>
+      <path d="M12 7.1C10.5 5.8 8.6 5.1 6.4 5.1H3.8v11.6h2.6c2.2 0 4.1.7 5.6 2" />
+      <path d="M12 7.1c1.5-1.3 3.4-2 5.6-2h2.6v11.6h-2.6c-2.2 0-4.1.7-5.6 2" />
+      <path d="M12 7.1v11.6" />
+    </>
+  ),
+  graduation: (
+    <>
+      <path d="M12 4 2.6 8.8 12 13.6l9.4-4.8L12 4Z" />
+      <path d="M6.6 11v4.6c0 1.4 2.4 2.6 5.4 2.6s5.4-1.2 5.4-2.6V11" />
+      <path d="M21.4 8.8v5.4" />
+    </>
+  ),
+  briefcase: (
+    <>
+      <path d="M4.2 8.6h15.6a1.4 1.4 0 0 1 1.4 1.4v8.2a1.4 1.4 0 0 1-1.4 1.4H4.2a1.4 1.4 0 0 1-1.4-1.4V10a1.4 1.4 0 0 1 1.4-1.4Z" />
+      <path d="M9 8.6V6.8A1.8 1.8 0 0 1 10.8 5h2.4A1.8 1.8 0 0 1 15 6.8v1.8" />
+      <path d="M2.8 13.2h18.4" />
+    </>
+  ),
+  fitness: (
+    <>
+      <path d="M3.4 9.4v5.2M6.6 7.2v9.6M17.4 7.2v9.6M20.6 9.4v5.2" />
+      <path d="M6.6 12h10.8" />
+    </>
+  ),
+  rocket: (
+    <>
+      <path d="M12 3.2c2.9 2.2 4.6 5.7 4.6 9.4L14.3 15H9.7l-2.3-2.4c0-3.7 1.7-7.2 4.6-9.4Z" />
+      <path d="M9.7 15 8 19.4l3.1-1.3M14.3 15l1.7 4.4-3.1-1.3" />
+      <circle cx="12" cy="9.8" r="1.5" />
+    </>
+  ),
+  pen: (
+    <>
+      <path d="M4.4 19.6h3.4L19.5 7.9a2 2 0 0 0-2.8-2.8L5 16.8v2.8Z" />
+      <path d="M14.6 7.2 17.4 10" />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="8.4" />
+      <path d="M3.6 12h16.8" />
+      <path d="M12 3.6c2.2 2.3 3.4 5.3 3.4 8.4S14.2 18.1 12 20.4c-2.2-2.3-3.4-5.3-3.4-8.4S9.8 5.9 12 3.6Z" />
+    </>
+  ),
+  // A clock wound back. The marker on an overdue row: time has passed, which
+  // is the fact. An exclamation mark says you should feel something about it,
+  // which §4.6 rules out.
+  history: (
+    <>
+      <path d="M3.4 9.2A9 9 0 1 1 3 12" />
+      <path d="M3.1 4.6v4.6h4.6" />
+      <path d="M12 7.8V12l2.8 1.7" />
+    </>
+  ),
+  list: <path d="M8.4 6.4h11.2M8.4 12h11.2M8.4 17.6h11.2M4.4 6.4h.01M4.4 12h.01M4.4 17.6h.01" />,
+  plus: <path d="M12 5.4v13.2M5.4 12h13.2" />,
   heart: <path d="M12 20.25s-7.25-4.4-7.25-9.25a3.9 3.9 0 0 1 7.25-2.4 3.9 3.9 0 0 1 7.25 2.4c0 4.85-7.25 9.25-7.25 9.25Z" />,
 };
 

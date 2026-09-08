@@ -228,3 +228,83 @@ export function summarizeToday(counts: TodayCounts): string {
   ].filter((part): part is string => part !== null);
   return parts.join(" · ");
 }
+
+/* ---------------------------------------------------------------------------
+ * The same day's work, grouped by goal, for the cross-goal Today screen.
+ *
+ * /today and /goals/[id] were built in parallel and each grew its own answer
+ * to "is this overdue, and what does the badge say". Two answers is one too
+ * many: they disagreed on the wording for a task past its start date, so the
+ * same row read "8 days overdue" on one screen and "Past its start date" on
+ * the other. Everything below delegates to urgencyFor and selectGoalToday
+ * above, so there is one engine, one wording and one order. What is added
+ * here is only the grouping and the order the SECTIONS appear in.
+ * ------------------------------------------------------------------------- */
+
+export type TodayGoalSection = {
+  goalId: string;
+  /** Raw naming columns; the page resolves them through lib/goal-label. */
+  goalLabel: string | null;
+  goalTitle: string;
+  tasks: GoalTodayTask[];
+  counts: TodayCounts;
+  /** "2 overdue · 3 due today" — the section header's status pill. */
+  summary: string;
+};
+
+/** What a candidate task carries beyond GoalTaskInput when it comes from Today. */
+export type CrossGoalTask = GoalTaskInput & {
+  goalId: string;
+  goalLabel?: string | null;
+  goalTitle: string;
+};
+
+/**
+ * Today's work, split into one section per goal.
+ *
+ * §4.5's cap of three is applied WITHIN a section by the renderer
+ * (VISIBLE_TASKS), not across the screen. Three cards in total was the older
+ * reading and it let a second goal with two things a month overdue go
+ * unmentioned, which §18 and §15 both care about. Everything eligible is
+ * returned so a section can say how many more there are.
+ *
+ * Sections are ordered by their own first row, using the ranking
+ * selectGoalToday already applied inside them. That is what makes the page
+ * read in one order: the first row of the first section is the most pressing
+ * thing on the screen.
+ */
+export function selectTodayByGoal(candidates: CrossGoalTask[], today: DayKey): TodayGoalSection[] {
+  const byGoal = new Map<string, CrossGoalTask[]>();
+  for (const task of candidates) {
+    // §13 — work that is not in the user's control keeps its own section on
+    // the page rather than taking a slot they cannot act on. selectGoalToday
+    // only demotes it, because on a single goal's page it is still that
+    // goal's work; across every goal at once it would crowd out work that
+    // can actually be done today.
+    if (task.waitingOn) continue;
+    const existing = byGoal.get(task.goalId);
+    if (existing) existing.push(task);
+    else byGoal.set(task.goalId, [task]);
+  }
+
+  const sections: TodayGoalSection[] = [];
+  for (const [goalId, tasks] of byGoal) {
+    const { tasks: chosen, counts } = selectGoalToday(tasks, today);
+    if (chosen.length === 0) continue;
+    sections.push({
+      goalId,
+      goalLabel: tasks[0]!.goalLabel ?? null,
+      goalTitle: tasks[0]!.goalTitle,
+      tasks: chosen,
+      counts,
+      summary: summarizeToday(counts),
+    });
+  }
+
+  return sections.sort(
+    (a, b) =>
+      b.tasks[0]!.rank - a.tasks[0]!.rank ||
+      b.counts.overdue - a.counts.overdue ||
+      b.tasks.length - a.tasks.length,
+  );
+}

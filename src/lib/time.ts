@@ -199,3 +199,30 @@ export function formatQuietHours(
   const window = `${formatHour(startHour)} to ${formatHour(endHour)}`;
   return timeZone ? `${window}, ${timeZoneLabel(timeZone)}` : window;
 }
+
+/**
+ * The date heading on Today. "Tuesday, 8 Sept 2026"
+ *
+ * A DayKey formatter like formatDayKey and formatDayKeyYear beside it, not a
+ * Date one: the day has already been resolved in the reader's zone by
+ * lib/time-zone, and re-deriving it from an instant here is how it drifts back
+ * onto the server's clock.
+ *
+ * en-GB with the rest of the product rather than the mockup's "Sep 9, 2025" —
+ * a screen that says "Tuesday, Sep 9" above a row that says "Due 10 Aug" is
+ * two date conventions in one viewport. formatLongDayKey is the same date
+ * without a year, which is the wrong trade here: the heading is the one place
+ * the reader is told what day it actually is.
+ */
+export function formatWeekdayDayKey(day: string | null | undefined): string {
+  if (!day) return "";
+  const [year, month, date] = day.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !date) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, date)));
+}

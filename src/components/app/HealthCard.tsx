@@ -2,7 +2,11 @@ import Icon from "@/components/icons/Icon";
 import { HEALTH_LABELS } from "@/lib/app-copy";
 import type { HealthFactor, HealthStatus } from "@/lib/health/score";
 
-const TONE: Record<HealthStatus, string> = {
+/**
+ * How each status looks. Exported because My Goals shows the same pill beside
+ * the same statuses, and two tables would drift.
+ */
+export const HEALTH_TONE: Record<HealthStatus, string> = {
   on_track: "bg-blush-light text-berry",
   needs_attention: "bg-cream text-mauve",
   at_risk: "bg-cream text-berry",
@@ -61,7 +65,7 @@ export default function HealthCard({
           {score}
           <span className="ml-1 text-base font-medium text-mauve-light">/ 100</span>
         </p>
-        <span className={`rounded-pill px-3 py-1 text-sm font-semibold ${TONE[status]}`}>
+        <span className={`rounded-pill px-3 py-1 text-sm font-semibold ${HEALTH_TONE[status]}`}>
           {HEALTH_LABELS[status]}
         </span>
       </div>
