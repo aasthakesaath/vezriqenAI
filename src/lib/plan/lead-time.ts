@@ -145,14 +145,21 @@ export function planReminders(input: {
     });
   }
 
-  // A hard deadline that is not the start-by date earns one more check, but
-  // only for work that matters — §12 forbids one email per low-value task.
+  // A hard deadline that is well after the start-by date earns one more check,
+  // but only for work that matters — §12 forbids one email per low-value task.
   if (input.deadline && input.priority <= 2) {
     const check = addDays(input.deadline, -2);
+
+    // The check must fall after work was due to begin. For a routine, where the
+    // deadline and the start-by date are the same moment, deadline-minus-two-
+    // days lands *before* the heads-up and would ask how something went two
+    // days before it was due to start.
+    const afterStart = !input.startBy || check.getTime() > input.startBy.getTime();
     const alreadyCovered = reminders.some(
       (r) => Math.abs(r.scheduledAt.getTime() - check.getTime()) < 24 * 60 * 60 * 1000,
     );
-    if (!alreadyCovered) {
+
+    if (afterStart && !alreadyCovered) {
       reminders.push({ type: "action_checkpoint", scheduledAt: check, responseRequired: true });
     }
   }

@@ -15,12 +15,14 @@ Built to the Phase 1 PRD. Section references below point at that document.
 | Milestone | Scope | State |
 |---|---|---|
 | 1 | Public site — homepage, My Story ♥, legal, feedback, auth shells | **Done** |
-| 2 | Google auth + onboarding + plan upload/paste | Not started |
-| 3 | AI plan extraction + SMART confirmation + approval | Not started |
-| 4 | Today screen + Goal Dashboard + Goal Health | Not started |
-| 5 | Reminders/checkpoints + Execution Block Coach + replanning | Not started |
-| 6 | Google Calendar + email reminders | Not started |
-| 7 | End-to-end testing, accessibility, security review | Not started |
+| 2 | Google auth + onboarding + plan upload/paste | **Done** |
+| 3 | AI plan extraction + SMART confirmation + approval | **Done** |
+| 4 | Today screen + Goal Dashboard + Goal Health | **Done** |
+| 5 | Reminders/checkpoints + Execution Block Coach + replanning | **Done** |
+| 6 | Google Calendar + email reminders | **Done** |
+| 7 | End-to-end testing, accessibility, security review | **Done** |
+
+Phase 1 Definition of Done (§26) is verified in `docs/phase1-definition-of-done.md`.
 
 ---
 
@@ -90,9 +92,75 @@ Needed now:
 | `NEXT_PUBLIC_LEGAL_CONTACT_EMAIL` | Contact address on legal pages |
 | `FEEDBACK_WEBHOOK_URL` | Where feedback is delivered. **Without it the form returns an error rather than silently dropping messages.** |
 
-Needed from Milestone 2: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-`GOOGLE_REDIRECT_URI`, `AUTH_SECRET`, `DATABASE_URL`, storage credentials,
-`ANTHROPIC_API_KEY`, email provider key.
+### Supabase
+
+Supabase provides auth, database and file storage, and signs the session — so
+there is no `AUTH_SECRET` and no second auth system to keep in step.
+
+| Variable | Why |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser client; every read is constrained by RLS |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Server only.** Bypasses RLS — never prefix with `NEXT_PUBLIC_` |
+
+The Google OAuth client id and secret live in the **Supabase dashboard**
+(Authentication → Providers → Google), not here. Google Cloud needs
+`https://<project-ref>.supabase.co/auth/v1/callback` as an authorised redirect
+URI, and Supabase needs `https://www.vezriqen.com/api/auth/google/callback`
+under Authentication → URL Configuration → Redirect URLs.
+
+Apply `supabase/migrations/0001…0004` in order, then run
+`supabase/verify_security.sql` and `supabase/verify_rls_cross_user.sql`.
+
+### AI
+
+| Variable | Why |
+|---|---|
+| `ANTHROPIC_API_KEY` | Plan extraction, coaching and audits (§22) |
+| `AI_MODEL` | Optional override; defaults to a current Claude model |
+
+### Google Calendar — needs its own Google Cloud project
+
+Calendar uses a **different OAuth client from sign-in**, and this is not
+optional. The production sign-in client is PUBLISHED with only
+`openid email profile`. Adding a sensitive scope to a published app before
+verification imposes a permanent user cap on the project that cannot be reset.
+
+Create a **second Google Cloud project in Testing status** for Calendar
+development, and add exactly these two scopes:
+
+```
+https://www.googleapis.com/auth/calendar.freebusy
+https://www.googleapis.com/auth/calendar.events
+```
+
+`calendar.freebusy` rather than `calendar.readonly` is deliberate: Vezri needs
+to know when you are busy, not what you are doing (§23, minimum scopes).
+
+Authorised redirect URI: `https://www.vezriqen.com/api/calendar/callback`.
+
+| Variable | Why |
+|---|---|
+| `GOOGLE_CALENDAR_CLIENT_ID` | The *second* project's client |
+| `GOOGLE_CALENDAR_CLIENT_SECRET` | " |
+| `GOOGLE_CALENDAR_REDIRECT_URI` | `https://www.vezriqen.com/api/calendar/callback` |
+| `CALENDAR_TOKEN_ENCRYPTION_KEY` | 32 bytes base64 — `openssl rand -base64 32` |
+
+### Email and scheduled reminders
+
+| Variable | Why |
+|---|---|
+| `EMAIL_PROVIDER_API_KEY` | Resend key. **Optional** — see below |
+| `EMAIL_FROM` | Sender identity |
+| `EMAIL_ACTION_SIGNING_KEY` | Signs Done/Snooze/Stuck links — `openssl rand -base64 32` |
+| `CRON_SECRET` | Bearer secret for `/api/cron/reminders` — `openssl rand -base64 32` |
+
+**Without `EMAIL_PROVIDER_API_KEY` the product still works.** Reminders appear
+in full in the in-app reminder centre, the delivery attempt is logged loudly,
+and the reminder is recorded as `suppressed` — never as `sent`. A check
+constraint on `reminders` makes a `sent_at` alongside a non-sent status
+impossible to store, so the record cannot drift into claiming a delivery that
+did not happen.
 
 ---
 

@@ -5,15 +5,28 @@ import type { Config } from "tailwindcss";
  * approved mockup's CTA colour. Dusty rose (#C98F9D) cannot carry white text at
  * WCAG AA, and §30.11 requires accessible contrast, so interactive surfaces and
  * body links use `berry` while Palette A carries the soft decorative canvas.
+ *
+ * Milestone 7 accessibility pass: two tokens were failing WCAG AA as *text* and
+ * have been darkened along the same hue and saturation, so the palette still
+ * reads as Palette A.
+ *
+ *   rose        #C98F9D -> #AE566B   was 2.66:1 on white, now 4.84:1
+ *   mauve-light #8E7078 -> #876A72   was 4.43:1 on white, now 4.84:1
+ *
+ * Both clear 4.5:1 on the lightest ground they sit on (blush-wash #FDF6F7), not
+ * merely on pure white. `rose.soft` is untouched: it is only ever a decorative
+ * fill or border, where contrast minimums do not apply. Palette A's published
+ * dusty rose therefore survives unchanged everywhere it is a surface, and is
+ * darkened only where it has to be legible.
  */
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        rose: { DEFAULT: "#C98F9D", soft: "#DCB0BB" },
+        rose: { DEFAULT: "#AE566B", soft: "#DCB0BB", surface: "#C98F9D" },
         blush: { DEFAULT: "#E8C1C8", light: "#F7E7EA", wash: "#FDF6F7" },
-        mauve: { DEFAULT: "#76545D", light: "#8E7078" },
+        mauve: { DEFAULT: "#76545D", light: "#876A72" },
         cream: { DEFAULT: "#F5E8D7", light: "#FBF4EC" },
         gold: { DEFAULT: "#C9A15C", light: "#E3CDA3" },
         berry: { DEFAULT: "#A82449", deep: "#8C1B3B", light: "#C2416A" },

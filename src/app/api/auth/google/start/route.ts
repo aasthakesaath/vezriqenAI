@@ -29,7 +29,11 @@ export async function POST(request: Request) {
   const origin = new URL(request.url).origin;
   const callback = new URL("/api/auth/google/callback", origin);
   // Only same-site paths survive, so `next` cannot be used as an open redirect.
-  callback.searchParams.set("next", next.startsWith("/") ? next : "/start");
+  // "//evil.com" is a protocol-relative URL and starts with "/", so the second
+  // check is the one that actually matters. The callback re-validates too;
+  // both ends check because either one being the sole guard is a bad shape.
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/start";
+  callback.searchParams.set("next", safeNext);
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
