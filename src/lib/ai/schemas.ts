@@ -90,6 +90,33 @@ export const ExtractedPlanSchema = z.object({
   reasoning: z.string().max(600),
 });
 
+/**
+ * PASS 1 of extraction: everything except the tasks.
+ *
+ * Bounded output by construction — at most 40 milestones and a handful of short
+ * lists — so this pass fits in one call no matter how long the document is. The
+ * tasks are what make the response unbounded, and they are collected separately.
+ */
+export const ExtractedPlanStructureSchema = ExtractedPlanSchema.omit({ tasks: true });
+
+/**
+ * PASS 2 of extraction: tasks for a named subset of milestones.
+ *
+ * Capped well below the 150 a whole plan may hold, because the cap is what
+ * keeps a single response inside the model's output budget. build.ts asks for a
+ * few milestones at a time and concatenates the answers.
+ *
+ * 30, sized against the live 58 KB run: a task with a verbatim provenance
+ * excerpt is a few hundred output tokens, so this leaves real headroom under a
+ * 16k budget rather than sitting just beneath it.
+ */
+export const ExtractedTaskBatchSchema = z.object({
+  tasks: z.array(ExtractedTaskSchema).max(30),
+});
+
+export type ExtractedPlanStructure = z.infer<typeof ExtractedPlanStructureSchema>;
+export type ExtractedTaskBatch = z.infer<typeof ExtractedTaskBatchSchema>;
+
 export type ExtractedPlan = z.infer<typeof ExtractedPlanSchema>;
 export type ExtractedMilestone = z.infer<typeof ExtractedMilestoneSchema>;
 export type ExtractedTask = z.infer<typeof ExtractedTaskSchema>;

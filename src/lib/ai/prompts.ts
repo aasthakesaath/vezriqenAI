@@ -86,6 +86,72 @@ export function extractionPrompt(input: {
   return parts.join("\n\n");
 }
 
+/**
+ * PASS 1 prompt — structure only.
+ *
+ * Says "no tasks" three ways, because the single most likely failure here is
+ * the model helpfully emitting tasks anyway and blowing the budget the split
+ * exists to protect.
+ */
+export function structurePrompt(input: {
+  documentText: string | null;
+  userGoalText: string | null;
+  today: string;
+}): string {
+  const parts = [extractionPrompt(input).replace(/\nExtract the plan as structured data\.$/, "")];
+  parts.push(
+    `This is the FIRST of two passes. In this pass, extract ONLY the goal-level
+information and the milestones. Do NOT extract tasks — a later pass does that,
+and tasks emitted here are discarded. Spend the effort on getting the milestone
+list complete and correctly dated instead.`,
+  );
+  return parts.join("\n\n");
+}
+
+/**
+ * PASS 2 prompt — tasks for a named subset of milestones.
+ *
+ * The document is re-sent in full because a task's provenance excerpt must be a
+ * verbatim quote from it; giving the model only the milestone titles would make
+ * every excerpt a fabrication.
+ */
+export function tasksPrompt(input: {
+  documentText: string | null;
+  userGoalText: string | null;
+  today: string;
+  outcome: string;
+  milestoneTitles: string[];
+  /** True when the plan has no milestones at all and this is the only pass. */
+  wholePlan: boolean;
+}): string {
+  const parts = [extractionPrompt(input).replace(/\nExtract the plan as structured data\.$/, "")];
+
+  parts.push(`The goal has already been read as: "${input.outcome}"`);
+
+  if (input.wholePlan) {
+    parts.push(
+      `This plan has no milestones. Extract the near-horizon tasks for the plan as
+a whole, following the SCOPE rules. Leave milestone_title null on every task.`,
+    );
+  } else {
+    parts.push(
+      `Milestones have already been extracted in an earlier pass. In THIS pass,
+extract tasks for ONLY these milestones:
+
+${input.milestoneTitles.map((t) => `- ${t}`).join("\n")}
+
+Set milestone_title on every task to exactly one of the titles above, copied
+character for character. Ignore work belonging to any other milestone — another
+pass covers it, and duplicating it here would create duplicate tasks. Follow the
+SCOPE rules: near-horizon work only, plus anything that must start early because
+someone else is involved.`,
+    );
+  }
+
+  parts.push("Return only the tasks.");
+  return parts.join("\n\n");
+}
+
 export const VISION_EXTRACTION_NOTE = `The plan is in the attached image. Read it
 carefully, including anything handwritten. If part of it is illegible, leave those
 items out rather than guessing, and say so in reasoning.`;

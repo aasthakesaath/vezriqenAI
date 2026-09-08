@@ -41,7 +41,15 @@ export interface AIProvider {
   ): Promise<StructuredResult<z.infer<T>>>;
 }
 
-/** Thrown when the model's output does not satisfy the schema. */
+/**
+ * Thrown when the model's output does not satisfy the schema.
+ *
+ * The message is USER-FACING: it is returned by the extract route and rendered
+ * on a page written for humans. Never construct one from a provider or parser
+ * error string — put the technical detail in `cause`, which is logged but
+ * never sent to the browser. A user should not be reading "Expected ',' or
+ * '}' after property value in JSON at position 25162".
+ */
 export class AIExtractionError extends Error {
   constructor(
     message: string,
@@ -49,5 +57,24 @@ export class AIExtractionError extends Error {
   ) {
     super(message);
     this.name = "AIExtractionError";
+  }
+}
+
+/**
+ * The model stopped because it ran out of output budget, not because it
+ * finished. A known, detectable condition — `stop_reason === "max_tokens"` —
+ * and therefore something to recover from rather than let surface as a JSON
+ * parse failure downstream.
+ *
+ * Truncated output is never partially usable: the JSON ends mid-value, so
+ * there is nothing to salvage and nothing is written.
+ */
+export class AITruncationError extends AIExtractionError {
+  constructor(
+    message: string,
+    readonly detail: { action: string; maxTokens: number; outputTokens: number },
+  ) {
+    super(message);
+    this.name = "AITruncationError";
   }
 }

@@ -1,0 +1,672 @@
+PROJECT ATLAS — EXECUTION PLAN
+Programme window: 3 February 2026 through 30 October 2026
+Owner: Programme Management Office
+Status: Approved at the 28 January steering committee
+
+GOAL
+Ship Atlas to general availability by 30 October 2026 with SOC 2 Type II attestation in hand, zero unplanned customer downtime during migration, and 40 reference-able enterprise accounts live on the new platform.
+
+SUCCESS MEASURES
+- SOC 2 Type II report issued by the auditor no later than 2 October 2026.
+- 100% of enterprise tenants migrated with under 5 minutes cumulative downtime each.
+- 40 named accounts live and referenceable.
+- Gross margin at or above 71% at GA.
+
+CONSTRAINTS
+- Engineering headcount is frozen until Q3.
+- The auditor requires 90 days of continuous control evidence before fieldwork.
+- No production changes during the 14-22 August customer conference.
+
+RISKS
+- The backfill has never been run at full production volume.
+- The security vendor's remediation retest has a 3 week lead time.
+- Two of the four reference accounts are still in procurement.
+
+
+======================================================================
+FEBRUARY 2026
+======================================================================
+
+Week 1 — commencing 1 February 2026
+  Regulatory readiness (Compliance)
+    - Review the DPIA sign-off. Due 5 February 2026.
+      Depends on: the previous week's DPIA sign-off review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Reconcile the dual-write window. Due 5 February 2026.
+      Depends on: the previous week's dual-write window review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Finalise the launch site. Due 5 February 2026.
+      Depends on: the previous week's launch site review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Publish the panel training. Due 5 February 2026.
+      Depends on: the previous week's panel training review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Audit the pricing model. Due 5 February 2026.
+      Depends on: the previous week's pricing model review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Publish the playbook refresh. Due 5 February 2026.
+      Depends on: the previous week's playbook refresh review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 2 — commencing 8 February 2026
+  Regulatory readiness (Compliance)
+    - Circulate the sub-processor register. Due 12 February 2026.
+      Depends on: the previous week's sub-processor register review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Draft the backfill verification. Due 12 February 2026.
+      Depends on: the previous week's backfill verification review being signed off.
+      Dr. Sofia Okonkwo must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Validate the analyst pre-briefs. Due 12 February 2026.
+      Depends on: the previous week's analyst pre-briefs review being signed off.
+      the design partner must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Audit the offer approvals. Due 12 February 2026.
+      Depends on: the previous week's offer approvals review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Reconcile the board pack. Due 12 February 2026.
+      Depends on: the previous week's board pack review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Audit the escalation matrix. Due 12 February 2026.
+      Depends on: the previous week's escalation matrix review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 3 — commencing 15 February 2026
+  Regulatory readiness (Compliance)
+    - Finalise the penetration test remediation. Due 19 February 2026.
+      Depends on: the previous week's penetration test remediation review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Review the rollback rehearsal. Due 19 February 2026.
+      Depends on: the previous week's rollback rehearsal review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Rehearse the customer references. Due 19 February 2026.
+      Depends on: the previous week's customer references review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Reconcile the onboarding plan. Due 19 February 2026.
+      Depends on: the previous week's onboarding plan review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Draft the audit prep. Due 19 February 2026.
+      Depends on: the previous week's audit prep review being signed off.
+      the design partner must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Reconcile the health scoring. Due 19 February 2026.
+      Depends on: the previous week's health scoring review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 4 — commencing 22 February 2026
+  Regulatory readiness (Compliance)
+    - Validate the SOC 2 Type II evidence. Due 26 February 2026.
+      Depends on: the previous week's SOC 2 Type II evidence review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Circulate the schema cutover. Due 26 February 2026.
+      Depends on: the previous week's schema cutover review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Approve the positioning brief. Due 26 February 2026.
+      Depends on: the previous week's positioning brief review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Draft the role scorecards. Due 26 February 2026.
+      Depends on: the previous week's role scorecards review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Review the revenue recognition memo. Due 26 February 2026.
+      Depends on: the previous week's revenue recognition memo review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Draft the migration comms. Due 26 February 2026.
+      Depends on: the previous week's migration comms review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+======================================================================
+MARCH 2026
+======================================================================
+
+Week 5 — commencing 1 March 2026
+  Regulatory readiness (Compliance)
+    - Rehearse the DPIA sign-off. Due 5 March 2026.
+      Depends on: the previous week's DPIA sign-off review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Finalise the dual-write window. Due 5 March 2026.
+      Depends on: the previous week's dual-write window review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Publish the launch site. Due 5 March 2026.
+      Depends on: the previous week's launch site review being signed off.
+      Dr. Sofia Okonkwo must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Review the panel training. Due 5 March 2026.
+      Depends on: the previous week's panel training review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Circulate the pricing model. Due 5 March 2026.
+      Depends on: the previous week's pricing model review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Review the playbook refresh. Due 5 March 2026.
+      Depends on: the previous week's playbook refresh review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 6 — commencing 8 March 2026
+  Regulatory readiness (Compliance)
+    - Approve the sub-processor register. Due 12 March 2026.
+      Depends on: the previous week's sub-processor register review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Validate the backfill verification. Due 12 March 2026.
+      Depends on: the previous week's backfill verification review being signed off.
+      the design partner must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Audit the analyst pre-briefs. Due 12 March 2026.
+      Depends on: the previous week's analyst pre-briefs review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Circulate the offer approvals. Due 12 March 2026.
+      Depends on: the previous week's offer approvals review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Finalise the board pack. Due 12 March 2026.
+      Depends on: the previous week's board pack review being signed off.
+      Dr. Sofia Okonkwo must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Circulate the escalation matrix. Due 12 March 2026.
+      Depends on: the previous week's escalation matrix review being signed off.
+      Dr. Sofia Okonkwo must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 7 — commencing 15 March 2026
+  Regulatory readiness (Compliance)
+    - Publish the penetration test remediation. Due 19 March 2026.
+      Depends on: the previous week's penetration test remediation review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Rehearse the rollback rehearsal. Due 19 March 2026.
+      Depends on: the previous week's rollback rehearsal review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Reconcile the customer references. Due 19 March 2026.
+      Depends on: the previous week's customer references review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Finalise the onboarding plan. Due 19 March 2026.
+      Depends on: the previous week's onboarding plan review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Validate the audit prep. Due 19 March 2026.
+      Depends on: the previous week's audit prep review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Finalise the health scoring. Due 19 March 2026.
+      Depends on: the previous week's health scoring review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 8 — commencing 22 March 2026
+  Regulatory readiness (Compliance)
+    - Audit the SOC 2 Type II evidence. Due 26 March 2026.
+      Depends on: the previous week's SOC 2 Type II evidence review being signed off.
+      Dr. Sofia Okonkwo must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Approve the schema cutover. Due 26 March 2026.
+      Depends on: the previous week's schema cutover review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Draft the positioning brief. Due 26 March 2026.
+      Depends on: the previous week's positioning brief review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Validate the role scorecards. Due 26 March 2026.
+      Depends on: the previous week's role scorecards review being signed off.
+      Dr. Sofia Okonkwo must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Rehearse the revenue recognition memo. Due 26 March 2026.
+      Depends on: the previous week's revenue recognition memo review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Validate the migration comms. Due 26 March 2026.
+      Depends on: the previous week's migration comms review being signed off.
+      Dr. Sofia Okonkwo must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+======================================================================
+APRIL 2026
+======================================================================
+
+Week 9 — commencing 1 April 2026
+  Regulatory readiness (Compliance)
+    - Reconcile the DPIA sign-off. Due 5 April 2026.
+      Depends on: the previous week's DPIA sign-off review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Publish the dual-write window. Due 5 April 2026.
+      Depends on: the previous week's dual-write window review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Review the launch site. Due 5 April 2026.
+      Depends on: the previous week's launch site review being signed off.
+      the design partner must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Rehearse the panel training. Due 5 April 2026.
+      Depends on: the previous week's panel training review being signed off.
+      Dr. Sofia Okonkwo must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Approve the pricing model. Due 5 April 2026.
+      Depends on: the previous week's pricing model review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Rehearse the playbook refresh. Due 5 April 2026.
+      Depends on: the previous week's playbook refresh review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 10 — commencing 8 April 2026
+  Regulatory readiness (Compliance)
+    - Draft the sub-processor register. Due 12 April 2026.
+      Depends on: the previous week's sub-processor register review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Audit the backfill verification. Due 12 April 2026.
+      Depends on: the previous week's backfill verification review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Circulate the analyst pre-briefs. Due 12 April 2026.
+      Depends on: the previous week's analyst pre-briefs review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Approve the offer approvals. Due 12 April 2026.
+      Depends on: the previous week's offer approvals review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Publish the board pack. Due 12 April 2026.
+      Depends on: the previous week's board pack review being signed off.
+      the design partner must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Approve the escalation matrix. Due 12 April 2026.
+      Depends on: the previous week's escalation matrix review being signed off.
+      the design partner must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 6 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 11 — commencing 15 April 2026
+  Regulatory readiness (Compliance)
+    - Review the penetration test remediation. Due 19 April 2026.
+      Depends on: the previous week's penetration test remediation review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Reconcile the rollback rehearsal. Due 19 April 2026.
+      Depends on: the previous week's rollback rehearsal review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Finalise the customer references. Due 19 April 2026.
+      Depends on: the previous week's customer references review being signed off.
+      Dr. Sofia Okonkwo must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Publish the onboarding plan. Due 19 April 2026.
+      Depends on: the previous week's onboarding plan review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Audit the audit prep. Due 19 April 2026.
+      Depends on: the previous week's audit prep review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Publish the health scoring. Due 19 April 2026.
+      Depends on: the previous week's health scoring review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 7 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 12 — commencing 22 April 2026
+  Regulatory readiness (Compliance)
+    - Circulate the SOC 2 Type II evidence. Due 26 April 2026.
+      Depends on: the previous week's SOC 2 Type II evidence review being signed off.
+      the design partner must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Draft the schema cutover. Due 26 April 2026.
+      Depends on: the previous week's schema cutover review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Validate the positioning brief. Due 26 April 2026.
+      Depends on: the previous week's positioning brief review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Audit the role scorecards. Due 26 April 2026.
+      Depends on: the previous week's role scorecards review being signed off.
+      the design partner must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Reconcile the revenue recognition memo. Due 26 April 2026.
+      Depends on: the previous week's revenue recognition memo review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Audit the migration comms. Due 26 April 2026.
+      Depends on: the previous week's migration comms review being signed off.
+      the design partner must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 2 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+======================================================================
+MAY 2026
+======================================================================
+
+Week 13 — commencing 1 May 2026
+  Regulatory readiness (Compliance)
+    - Finalise the DPIA sign-off. Due 5 May 2026.
+      Depends on: the previous week's DPIA sign-off review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Review the dual-write window. Due 5 May 2026.
+      Depends on: the previous week's dual-write window review being signed off.
+      Dr. Sofia Okonkwo must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Rehearse the launch site. Due 5 May 2026.
+      Depends on: the previous week's launch site review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Reconcile the panel training. Due 5 May 2026.
+      Depends on: the previous week's panel training review being signed off.
+      the design partner must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Draft the pricing model. Due 5 May 2026.
+      Depends on: the previous week's pricing model review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Reconcile the playbook refresh. Due 5 May 2026.
+      Depends on: the previous week's playbook refresh review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 3 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 14 — commencing 8 May 2026
+  Regulatory readiness (Compliance)
+    - Validate the sub-processor register. Due 12 May 2026.
+      Depends on: the previous week's sub-processor register review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Circulate the backfill verification. Due 12 May 2026.
+      Depends on: the previous week's backfill verification review being signed off.
+      Priya Raman must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.
+  Go-to-market (Marketing)
+    - Approve the analyst pre-briefs. Due 12 May 2026.
+      Depends on: the previous week's analyst pre-briefs review being signed off.
+      the security vendor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the go-to-market workstream cannot start the following stage and the GA date is at risk.
+  Hiring (People)
+    - Draft the offer approvals. Due 12 May 2026.
+      Depends on: the previous week's offer approvals review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the hiring workstream cannot start the following stage and the GA date is at risk.
+  Finance (Finance)
+    - Review the board pack. Due 12 May 2026.
+      Depends on: the previous week's board pack review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the finance workstream cannot start the following stage and the GA date is at risk.
+  Customer success (CS)
+    - Draft the escalation matrix. Due 12 May 2026.
+      Depends on: the previous week's escalation matrix review being signed off.
+      the external auditor must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 4 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the customer success workstream cannot start the following stage and the GA date is at risk.
+
+Week 15 — commencing 15 May 2026
+  Regulatory readiness (Compliance)
+    - Rehearse the penetration test remediation. Due 19 May 2026.
+      Depends on: the previous week's penetration test remediation review being signed off.
+      Tom Aldridge must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the regulatory readiness workstream cannot start the following stage and the GA date is at risk.
+  Platform migration (Engineering)
+    - Finalise the rollback rehearsal. Due 19 May 2026.
+      Depends on: the previous week's rollback rehearsal review being signed off.
+      Legal counsel must respond before this can be closed; allow at least two weeks for that reply.
+      Evidence required: a dated document in the programme folder, countersigned.
+      Estimated effort: 5 hours of focused work, plus a 45 minute review meeting.
+      Notes: this item blocked in the previous programme and is on the critical path. If it slips more than five working days, the platform migration workstream cannot start the following stage and the GA date is at risk.

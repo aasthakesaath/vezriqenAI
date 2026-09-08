@@ -157,3 +157,41 @@ describe("provenance verification (PRD §7)", () => {
     });
   });
 });
+
+/**
+ * The 2026-09-08 production case, end to end against the real model.
+ *
+ * A single call on this document returns stop_reason "max_tokens" — that was
+ * measured, not assumed. This asserts the multi-pass path gets a whole plan out
+ * of it anyway.
+ */
+describe.skipIf(!hasKey)("live extraction of a large plan", () => {
+  it("reads a 58 KB execution plan without truncating", { timeout: 900_000 }, async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, join } = await import("node:path");
+    const { AnthropicProvider } = await import("@/lib/ai/anthropic");
+    const { extractPlanInPasses } = await import("@/lib/plan/build");
+
+    const documentText = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "fixtures", "large-execution-plan.txt"),
+      "utf8",
+    );
+    expect(Buffer.byteLength(documentText, "utf8")).toBeGreaterThan(50_000);
+
+    const result = await extractPlanInPasses({
+      provider: new AnthropicProvider(process.env.ANTHROPIC_API_KEY!),
+      documentText,
+      userGoalText: "Ship Atlas to GA by 30 October 2026",
+      today: "2026-02-03",
+    });
+
+    expect(ExtractedPlanSchema.safeParse(result.plan).success).toBe(true);
+    expect(result.plan.milestones.length).toBeGreaterThan(3);
+    expect(result.plan.tasks.length).toBeGreaterThan(5);
+    expect(result.passes).toBeGreaterThan(1);
+
+    // The plan's own goal, not a hallucinated one.
+    expect(result.plan.outcome.toLowerCase()).toContain("atlas");
+  });
+});

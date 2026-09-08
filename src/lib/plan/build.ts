@@ -1,9 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getAIProvider } from "@/lib/ai";
+import { getAIProvider, AITruncationError, type AIProvider } from "@/lib/ai";
 import {
-  ExtractedPlanSchema,
+  ExtractedPlanStructureSchema,
+  ExtractedTaskBatchSchema,
   SmartTargetSchema,
   verifyPlanProvenance,
   type ExtractedPlan,
@@ -14,12 +15,179 @@ import {
   EXTRACTION_SYSTEM,
   SMART_SYSTEM,
   VISION_EXTRACTION_NOTE,
-  extractionPrompt,
   smartPrompt,
+  structurePrompt,
+  tasksPrompt,
 } from "@/lib/ai/prompts";
 import { calculateStartBy, formatDate, type TaskType } from "./lead-time";
 
 type Client = SupabaseClient;
+
+
+/* ---------------------------------------------------------------------------
+ * Extraction in passes.
+ *
+ * A single call cannot emit a whole large plan. We shipped one that tried, and
+ * a 58 KB document made it run past max_tokens and return JSON that stopped
+ * mid-value; the user saw the parser complaining about position 25162.
+ *
+ * Raising the ceiling only moves the wall — §7 allows documents up to 100
+ * pages. So the work is split along the axis that actually makes the output
+ * grow, which is the task list:
+ *
+ *   pass 1  goal, measures, constraints, risks, milestones   (bounded: <= 40)
+ *   pass 2  tasks for milestones 1..n                        (bounded: <= 45)
+ *   pass 3  tasks for milestones n+1..                       ...
+ *
+ * Task passes are independent, so they run concurrently and a big plan costs
+ * roughly the wall-clock of one call rather than the sum of all of them.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Milestones per task call.
+ *
+ * Three, not five. Five was the first guess and the live 58 KB run truncated on
+ * it — a dense workstream milestone can carry a dozen tasks with quoted
+ * provenance, and three of those already fill a good part of the budget.
+ * Smaller batches also finish faster individually, which matters because the
+ * extract route has a 300 s ceiling.
+ */
+const MILESTONES_PER_TASK_PASS = 3;
+
+/**
+ * Concurrent task passes. Six keeps a 20-milestone plan to about two waves,
+ * which is what keeps the whole extraction inside the route's time budget.
+ */
+const TASK_PASS_CONCURRENCY = 6;
+
+/** Total tasks kept, matching ExtractedPlanSchema's own ceiling. */
+const MAX_TASKS = 150;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Runs jobs with a fixed concurrency ceiling, preserving input order. */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  job: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await job(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * Reads a plan document into the full ExtractedPlan shape, in as many passes as
+ * the document needs. Callers downstream are unchanged — they still receive one
+ * assembled plan.
+ */
+export async function extractPlanInPasses(options: {
+  provider: AIProvider;
+  documentText: string | null;
+  userGoalText: string | null;
+  today: string;
+  image?: { data: string; mediaType: "image/jpeg" | "image/png" };
+}): Promise<{ plan: ExtractedPlan; modelVersion: string; passes: number }> {
+  const { provider, documentText, userGoalText, today, image } = options;
+  const promptInput = { documentText, userGoalText, today };
+  const withVisionNote = (prompt: string) =>
+    image ? `${prompt}\n\n${VISION_EXTRACTION_NOTE}` : prompt;
+
+  // ---- Pass 1: structure --------------------------------------------------
+  const structureResult = await provider.generateStructured({
+    action: "extract_plan_structure",
+    system: EXTRACTION_SYSTEM,
+    prompt: withVisionNote(structurePrompt(promptInput)),
+    schema: ExtractedPlanStructureSchema,
+    image,
+    effort: "high",
+  });
+  const structure = structureResult.data;
+
+  // ---- Pass 2..n: tasks ---------------------------------------------------
+  const titles = structure.milestones.map((m) => m.title);
+  const wholePlan = titles.length === 0;
+  const batches = wholePlan ? [[]] : chunk(titles, MILESTONES_PER_TASK_PASS);
+
+  const runBatch = (milestoneTitles: string[], index: number) =>
+    provider.generateStructured({
+      action: `extract_plan_tasks_${index + 1}`,
+      system: EXTRACTION_SYSTEM,
+      prompt: withVisionNote(
+        tasksPrompt({
+          ...promptInput,
+          outcome: structure.outcome,
+          milestoneTitles,
+          wholePlan,
+        }),
+      ),
+      schema: ExtractedTaskBatchSchema,
+      image,
+      effort: "high",
+    });
+
+  const batchResults = await mapLimit(batches, TASK_PASS_CONCURRENCY, async (titlesForBatch, i) => {
+    try {
+      return (await runBatch(titlesForBatch, i)).data.tasks;
+    } catch (error) {
+      // One dense batch truncating must not lose the rest of the plan. Split it
+      // and retry; if a single milestone still will not fit, drop that
+      // milestone's tasks rather than fail the whole extraction — the plan is
+      // far more useful with one gap than not at all.
+      if (!(error instanceof AITruncationError) || titlesForBatch.length <= 1) {
+        if (error instanceof AITruncationError) {
+          console.warn(
+            `[ai] tasks for "${titlesForBatch[0]}" do not fit in one response; skipping that milestone's tasks.`,
+          );
+          return [];
+        }
+        throw error;
+      }
+      const halves = chunk(titlesForBatch, Math.ceil(titlesForBatch.length / 2));
+      const retried = await mapLimit(halves, TASK_PASS_CONCURRENCY, async (half, j) => {
+        try {
+          return (await runBatch(half, i * 10 + j)).data.tasks;
+        } catch (retryError) {
+          if (retryError instanceof AITruncationError) return [];
+          throw retryError;
+        }
+      });
+      return retried.flat();
+    }
+  });
+
+  // Deduplicate: a title can legitimately appear in two batches if the model
+  // read an ambiguous heading twice, and two identical tasks is a worse
+  // outcome than one.
+  const seen = new Set<string>();
+  const tasks: ExtractedTask[] = [];
+  for (const task of batchResults.flat()) {
+    const key = `${task.milestone_title ?? ""}\u0000${task.title.trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tasks.push(task);
+    if (tasks.length >= MAX_TASKS) break;
+  }
+
+  return {
+    plan: { ...structure, tasks },
+    modelVersion: structureResult.modelVersion,
+    // Recorded in the audit log: §20 asks the plan to be explainable, and "how
+    // many passes did this take" is the first question when one looks wrong.
+    passes: 1 + batches.length,
+  };
+}
 
 /** Higher-consequence work sorts first on Today (PRD §17). */
 function derivePriority(task: ExtractedTask): number {
@@ -94,23 +262,16 @@ export async function buildPlanForGoal(options: {
 
   const provider = getAIProvider();
 
-  const basePrompt = extractionPrompt({
+  const extraction = await extractPlanInPasses({
+    provider,
     documentText,
     userGoalText: goal.user_goal_text,
     today,
-  });
-
-  const extraction = await provider.generateStructured({
-    action: "extract_plan",
-    system: EXTRACTION_SYSTEM,
-    prompt: image ? `${basePrompt}\n\n${VISION_EXTRACTION_NOTE}` : basePrompt,
-    schema: ExtractedPlanSchema,
     image,
-    effort: "high",
   });
 
   // Never trust an origin="explicit" claim; check the quote is really there.
-  const plan = verifyPlanProvenance(extraction.data, documentText);
+  const plan = verifyPlanProvenance(extraction.plan, documentText);
 
   const smartResult = await provider.generateStructured({
     action: "smart_target",
@@ -277,7 +438,11 @@ export async function buildPlanForGoal(options: {
       user_id: userId,
       goal_id: goalId,
       action_type: "extract_plan",
-      structured_input: { document_id: document?.id ?? null, used_vision: Boolean(image) },
+      structured_input: {
+        document_id: document?.id ?? null,
+        used_vision: Boolean(image),
+        extraction_passes: extraction.passes,
+      },
       structured_output: plan,
       explanation: plan.reasoning,
       model_version: extraction.modelVersion,
