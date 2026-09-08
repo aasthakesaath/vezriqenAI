@@ -13,6 +13,7 @@ import {
   splitHour,
   timeZoneLabel,
 } from "@/lib/time";
+import { dayKeyIn, hourIn } from "@/lib/time-zone";
 import { buildReminderEmail } from "@/lib/email/templates";
 
 /**
@@ -132,6 +133,7 @@ describe("no screen renders a bare 24-hour time", () => {
         quietEnd={7}
         emailReminders
         emailConfigured={false}
+        timeZone="America/Chicago"
       />,
     );
     const text = textOf(markup);
@@ -163,6 +165,12 @@ describe("no screen renders a bare 24-hour time", () => {
   it("no source file formats a time itself", () => {
     // One helper or none: a screen that reaches for toLocaleTimeString is how
     // 24-hour output comes back.
+    //
+    // Two files may touch Intl, and only two: lib/time.ts, which produces
+    // every user-visible time, and lib/time-zone.ts, which does day and hour
+    // ARITHMETIC and returns numbers. The test below holds that second one to
+    // its word, so the exemption cannot quietly become a formatting back door.
+    const allowed = [join("lib", "time.ts"), join("lib", "time-zone.ts")];
     const offenders: string[] = [];
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir)) {
@@ -172,7 +180,7 @@ describe("no screen renders a bare 24-hour time", () => {
           continue;
         }
         if (!/\.tsx?$/.test(entry)) continue;
-        if (path.endsWith(join("lib", "time.ts"))) continue;
+        if (allowed.some((suffix) => path.endsWith(suffix))) continue;
         const source = readFileSync(path, "utf8");
         if (/toLocaleTimeString|toLocaleDateString|toLocaleString|new Intl\.DateTimeFormat/.test(source)) {
           offenders.push(path);
@@ -181,5 +189,18 @@ describe("no screen renders a bare 24-hour time", () => {
     };
     walk("src");
     expect(offenders).toEqual([]);
+  });
+
+  it("the timezone helper returns values, never rendered times", () => {
+    const midnightCentral = new Date("2026-09-09T05:00:00Z");
+
+    // A day, with no clock in it at all.
+    expect(dayKeyIn(midnightCentral, "America/Chicago")).toBe("2026-09-09");
+    expect(bare24HourTimes(dayKeyIn(midnightCentral, "America/Chicago"))).toEqual([]);
+
+    // An hour, as a number to decide with — not a string to show.
+    expect(hourIn(midnightCentral, "America/Chicago")).toBe(0);
+    expect(hourIn(new Date("2026-09-09T01:30:00Z"), "America/Chicago")).toBe(20);
+    expect(typeof hourIn(midnightCentral, "UTC")).toBe("number");
   });
 });

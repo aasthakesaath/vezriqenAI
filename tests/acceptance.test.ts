@@ -354,6 +354,7 @@ describe("§25.E — complex uploaded strategy document", () => {
         confidence: 0.9,
         excerpt: "independent validation from a partner organisation",
         page_or_section: "Phase 2",
+        date_anchor: null,
       },
       source,
     );
@@ -365,6 +366,7 @@ describe("§25.E — complex uploaded strategy document", () => {
         confidence: 0.95,
         excerpt: "the budget is fixed at £40,000",
         page_or_section: null,
+        date_anchor: null,
       },
       source,
     );
@@ -430,7 +432,7 @@ describe("§25.E — complex uploaded strategy document", () => {
   /** "Low-confidence high-impact interpretations require confirmation." */
   it("marks low-confidence inferences so the UI can flag them", () => {
     const inferred = verifyProvenance(
-      { origin: "explicit", confidence: 0.9, excerpt: "not in the document", page_or_section: null },
+      { origin: "explicit", confidence: 0.9, excerpt: "not in the document", page_or_section: null, date_anchor: null },
       source,
     );
     expect(inferred.origin).toBe("inferred");

@@ -3,6 +3,8 @@ import AppHeader from "@/components/app/AppHeader";
 import { createClient, getUser } from "@/lib/supabase/server";
 import { loadBellReminders } from "@/lib/reminders/bell";
 import { SUPABASE_CONFIGURED } from "@/lib/env";
+import { loadUserSettings } from "@/lib/user-settings";
+import TimeZoneSync from "@/components/app/TimeZoneSync";
 
 /**
  * Every page below this layout is per-user, so none of them may be statically
@@ -42,7 +44,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     null;
 
   const supabase = await createClient();
-  const reminders = await loadBellReminders({ supabase });
+  const [reminders, settings] = await Promise.all([
+    loadBellReminders({ supabase }),
+    loadUserSettings(supabase),
+  ]);
 
   return (
     // The signed-in product sits on the softest tint in the palette so white
@@ -51,8 +56,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // measured in tests/palette-contrast.test.ts rather than judged by eye.
     // min-h-screen so the tint reaches the bottom of a short page.
     <div className="min-h-screen bg-blush-wash">
-      <AppHeader name={name} reminders={reminders} />
+      <AppHeader name={name} reminders={reminders} timeZone={settings.timeZone} />
       <main id="main">{children}</main>
+      {/* Captured once, on the first signed-in page view, and never again once
+          the user has chosen a zone in Settings. */}
+      <TimeZoneSync stored={settings.timeZone} setByUser={settings.timeZoneSetByUser} />
     </div>
   );
 }

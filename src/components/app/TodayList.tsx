@@ -5,10 +5,13 @@ import { useState } from "react";
 import TaskActions from "./TaskActions";
 import ExecutionBlockCoach from "@/components/coach/ExecutionBlockCoach";
 import { APP_ROUTES } from "@/lib/routes";
-import { formatDay } from "@/lib/time";
+import { formatDayKey } from "@/lib/time";
+import { toDayKey } from "@/lib/time-zone";
 
 /** Dates only here; the shared helper owns every format the user reads. */
-const shortDay = (value: string | null) => (value ? formatDay(value) : null);
+// Deadlines and start-by dates are calendar days, so they are never shifted
+// into a timezone — "1 Oct" reads as 1 October wherever the reader is.
+const shortDay = (value: string | null) => formatDayKey(toDayKey(value)) || null;
 
 export type TodayCardView = {
   id: string;

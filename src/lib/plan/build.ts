@@ -20,7 +20,10 @@ import {
   structurePrompt,
   tasksPrompt,
 } from "@/lib/ai/prompts";
-import { calculateStartBy, formatDate, type TaskType } from "./lead-time";
+import { calculateStartBy, type TaskType } from "./lead-time";
+import { dayKeyIn, toDayKey } from "@/lib/time-zone";
+import { loadUserSettings } from "@/lib/user-settings";
+import { inspectPlanDates, type PastPlanReport } from "./reshape";
 import {
   MAX_EXTRACTION_ATTEMPTS,
   PASS_STRUCTURE,
@@ -260,6 +263,8 @@ export type BuildResult = {
   smart: SmartTarget;
   milestoneCount: number;
   taskCount: number;
+  /** How much of the plan is already in the past, for the §14 offer. */
+  pastPlan: PastPlanReport;
 };
 
 /**
@@ -324,7 +329,7 @@ async function loadStoredStructure(
       .single(),
     supabase
       .from("milestones")
-      .select("title, target_date, weight, status, origin, confidence")
+      .select("title, target_date, weight, status, origin, confidence, date_anchor")
       .eq("goal_id", goalId)
       .order("sort_order", { ascending: true }),
   ]);
@@ -346,6 +351,7 @@ async function loadStoredStructure(
         confidence: Number(m.confidence),
         excerpt: null,
         page_or_section: null,
+        date_anchor: m.date_anchor ?? null,
       },
     })),
     clarifying_questions: [],
@@ -442,6 +448,7 @@ async function writeTaskBatch(options: {
       // NOT NULL, per §7 — every stored item carries its provenance.
       origin: task.provenance.origin,
       confidence: task.provenance.confidence,
+      date_anchor: task.provenance.date_anchor ?? null,
     };
   });
 
@@ -490,7 +497,10 @@ export async function buildPlanForGoal(options: {
   onProgress?: (event: ExtractionProgress) => void;
 }): Promise<BuildResult> {
   const { supabase, userId, goalId } = options;
-  const today = options.today ?? formatDate(new Date());
+  // The model's only "now". In the USER's zone, not the server's: a plan read
+  // at 8 PM in Texas was being told it was already tomorrow.
+  const { timeZone } = await loadUserSettings(supabase);
+  const today = options.today ?? dayKeyIn(new Date(), timeZone);
   const report = (event: ExtractionProgress) => options.onProgress?.(event);
 
   const { data: goal, error: goalError } = await supabase
@@ -628,6 +638,8 @@ export async function buildPlanForGoal(options: {
         // stored item to carry where it came from and how sure Vezri is.
         origin: milestone.provenance.origin,
         confidence: milestone.provenance.confidence,
+        // What a relative date was resolved against, when it was not stated.
+        date_anchor: milestone.provenance.date_anchor ?? null,
         sort_order: index,
       }));
 
@@ -783,10 +795,23 @@ export async function buildPlanForGoal(options: {
         `${spend.inputTokens} in / ${spend.outputTokens} out tokens, attempt ${progress.attempts}.`,
     );
 
-    const [{ count: milestoneCount }, { count: taskCount }] = await Promise.all([
+    const [{ count: milestoneCount }, { count: taskCount }, { data: dated }] = await Promise.all([
       supabase.from("milestones").select("id", { count: "exact", head: true }).eq("goal_id", goalId),
       supabase.from("tasks").select("id", { count: "exact", head: true }).eq("goal_id", goalId),
+      supabase.from("milestones").select("id, title, target_date, status").eq("goal_id", goalId),
     ]);
+
+    // §14 — a plan brought in after its own start dates is the common case,
+    // not an error. It is measured here and reported to the user, who decides.
+    const pastPlan = inspectPlanDates({
+      today,
+      items: (dated ?? []).map((m) => ({
+        id: m.id,
+        title: m.title,
+        date: toDayKey(m.target_date),
+        done: m.status === "done",
+      })),
+    });
 
     await supabase.from("ai_action_logs").insert([
       {
@@ -825,6 +850,7 @@ export async function buildPlanForGoal(options: {
       smart,
       milestoneCount: milestoneCount ?? 0,
       taskCount: taskCount ?? 0,
+      pastPlan,
     };
   } catch (error) {
     // Whatever landed stays landed. The document records how far it got so the

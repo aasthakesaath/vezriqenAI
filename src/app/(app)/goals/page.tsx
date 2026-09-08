@@ -7,7 +7,7 @@ import { POSE_FOR } from "@/lib/vezri-poses";
 import { HEALTH_LABELS } from "@/lib/app-copy";
 import { goalLabel } from "@/lib/goal-label";
 import { APP_ROUTES, goalPath } from "@/lib/routes";
-import { formatDay } from "@/lib/time";
+import { formatDayKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "My Goals", robots: { index: false } };
 
@@ -113,7 +113,7 @@ export default async function GoalsPage() {
                       {done} of {total} milestones complete
                     </span>
                   )}
-                  {goal.target_date && <span>By {formatDay(goal.target_date)}</span>}
+                  {goal.target_date && <span>By {formatDayKey(goal.target_date)}</span>}
                 </div>
               </Link>
             </li>

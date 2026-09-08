@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { APP_ROUTES } from "@/lib/routes";
 import { formatDayTime } from "@/lib/time";
+import { loadUserSettings } from "@/lib/user-settings";
 
 export const metadata: Metadata = { title: "Reminders", robots: { index: false } };
 
@@ -16,6 +17,7 @@ export const metadata: Metadata = { title: "Reminders", robots: { index: false }
  */
 export default async function RemindersPage() {
   const supabase = await createClient();
+  const { timeZone } = await loadUserSettings(supabase);
 
   const { data: reminders } = await supabase
     .from("reminders")
@@ -60,7 +62,7 @@ export default async function RemindersPage() {
                   <p className="font-medium text-ink">{task?.title ?? "A task"}</p>
                   <p className="mt-0.5 text-sm text-mauve">
                     Asked{" "}
-                    {formatDayTime(reminder.scheduled_at)}
+                    {formatDayTime(reminder.scheduled_at, timeZone)}
                     {" · "}
                     {/* §12 — never assume completion from silence. */}
                     Unconfirmed

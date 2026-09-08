@@ -7,6 +7,8 @@
  * answers would be inventing state that can then disagree with itself.
  */
 
+import { FALLBACK_TIME_ZONE, addDays, dayKeyIn, toDayKey, type DayKey } from "@/lib/time-zone";
+
 export type PlanTask = {
   id: string;
   title: string;
@@ -41,12 +43,22 @@ export function isPlanView(value: string | undefined): value is PlanView {
   return value === "today" || value === "week" || value === "month";
 }
 
-const DAY = 24 * 60 * 60 * 1000;
 const OPEN = new Set(["not_started", "in_progress", "unconfirmed", "partial"]);
 
-/** Inclusive window end, in days from now. */
-function windowEnd(now: Date, days: number): number {
-  return now.getTime() + days * DAY;
+/**
+ * The last calendar day a view covers, where the user is.
+ *
+ * Day keys rather than instants throughout: a deadline is a day, and comparing
+ * it against a moment made "today" mean "today in UTC" — which after 6 PM in
+ * Texas is tomorrow.
+ */
+function windowEnd(today: DayKey, days: number): DayKey {
+  return addDays(today, days);
+}
+
+/** The day it is where the user is. */
+export function viewToday(options: { now?: Date; timeZone?: string } = {}): DayKey {
+  return dayKeyIn(options.now ?? new Date(), options.timeZone ?? FALLBACK_TIME_ZONE);
 }
 
 /**
@@ -55,33 +67,33 @@ function windowEnd(now: Date, days: number): number {
  * Anything already past its start-by counts as wanted now, not as missed — the
  * screen that lists it says so once at the top rather than per row (§4).
  */
-export function tasksWithin(tasks: PlanTask[], now: Date, days: number): PlanTask[] {
-  const end = windowEnd(now, days);
+export function tasksWithin(tasks: PlanTask[], today: DayKey, days: number): PlanTask[] {
+  const end = windowEnd(today, days);
+  const marker = (task: PlanTask) => toDayKey(task.startBy) ?? toDayKey(task.deadline);
   return tasks
     .filter((task) => {
       if (!OPEN.has(task.status)) return false;
-      const marker = task.startBy ?? task.deadline;
-      if (!marker) return days >= 28; // undated work only surfaces in the widest view
-      return marker.getTime() <= end;
+      const day = marker(task);
+      if (!day) return days >= 28; // undated work only surfaces in the widest view
+      return day <= end;
     })
-    .sort((a, b) => {
-      const left = (a.startBy ?? a.deadline)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-      const right = (b.startBy ?? b.deadline)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-      return left - right;
-    });
+    .sort((a, b) => (marker(a) ?? "9999-12-31").localeCompare(marker(b) ?? "9999-12-31"));
 }
 
 /** Milestones whose target date falls within `days`, plus any already passed. */
 export function milestonesWithin(
   milestones: PlanMilestone[],
-  now: Date,
+  today: DayKey,
   days: number,
 ): PlanMilestone[] {
-  const end = windowEnd(now, days);
+  const end = windowEnd(today, days);
   return milestones
     .filter((m) => m.status !== "done")
-    .filter((m) => !m.targetDate || m.targetDate.getTime() <= end)
-    .sort((a, b) => (a.targetDate?.getTime() ?? 0) - (b.targetDate?.getTime() ?? 0));
+    .filter((m) => {
+      const day = toDayKey(m.targetDate);
+      return day === null || day <= end;
+    })
+    .sort((a, b) => (toDayKey(a.targetDate) ?? "").localeCompare(toDayKey(b.targetDate) ?? ""));
 }
 
 /** How far through a milestone's tasks the user is. */
@@ -96,12 +108,12 @@ export function milestoneProgress(
 /** The rollup a view needs. Today is 0 days out, week 7, month 31. */
 export function planForView(
   view: PlanView,
-  input: { milestones: PlanMilestone[]; tasks: PlanTask[]; now?: Date },
+  input: { milestones: PlanMilestone[]; tasks: PlanTask[]; now?: Date; timeZone?: string },
 ): { milestones: PlanMilestone[]; tasks: PlanTask[] } {
-  const now = input.now ?? new Date();
+  const today = viewToday(input);
   const days = view === "today" ? 0 : view === "week" ? 7 : 31;
   return {
-    milestones: milestonesWithin(input.milestones, now, days),
-    tasks: tasksWithin(input.tasks, now, days),
+    milestones: milestonesWithin(input.milestones, today, days),
+    tasks: tasksWithin(input.tasks, today, days),
   };
 }

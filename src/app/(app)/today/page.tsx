@@ -8,6 +8,8 @@ import { VezriPoseImage } from "@/components/VezriWorking";
 import { POSE_FOR } from "@/lib/vezri-poses";
 import { goalLabel } from "@/lib/goal-label";
 import { APP_ROUTES } from "@/lib/routes";
+import { toDayKey } from "@/lib/time-zone";
+import { greetingFor } from "@/lib/greeting";
 
 export const metadata: Metadata = { title: "Today", robots: { index: false } };
 
@@ -20,7 +22,7 @@ export const metadata: Metadata = { title: "Today", robots: { index: false } };
 export default async function TodayPage() {
   const user = await getUser();
   const supabase = await createClient();
-  const { cards, waitingOn, backlog, goals, reminderFor } = await loadToday({ supabase });
+  const { cards, waitingOn, backlog, goals, reminderFor, timeZone } = await loadToday({ supabase });
 
   const firstName =
     ((user?.user_metadata?.full_name ?? user?.user_metadata?.name) as string | undefined)?.split(
@@ -40,8 +42,10 @@ export default async function TodayPage() {
       title: card.title,
       reason: card.reason,
       estimatedMinutes: card.estimatedMinutes,
-      startBy: card.startBy?.toISOString() ?? null,
-      deadline: card.deadline?.toISOString() ?? null,
+      // Calendar days, passed as days. Sending an instant made the client
+      // render the day before for anyone west of Greenwich.
+      startBy: toDayKey(card.startBy),
+      deadline: toDayKey(card.deadline),
       reminderId: reminderFor?.get(card.id) ?? null,
       waitingOn: card.externalPartyName ?? null,
     })),
@@ -52,7 +56,8 @@ export default async function TodayPage() {
       <div className="flex items-start justify-between gap-6">
         <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-            {firstName ? `Good morning, ${firstName}` : "Good morning"}
+            {greetingFor({ timeZone })}
+            {firstName ? `, ${firstName}` : ""}
           </h1>
 
           {/* §4 — said ONCE, here, rather than on every card. Three cards each

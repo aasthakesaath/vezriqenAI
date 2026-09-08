@@ -113,6 +113,17 @@ function answerFor(action: string): unknown {
 function seed(): Tables {
   return {
     goals: [{ id: "goal-1", user_id: "user-1", user_goal_text: "Ship Atlas", normalized_goal: null }],
+    profiles: [
+      {
+        id: "user-1",
+        timezone: "America/Chicago",
+        timezone_set_by_user: false,
+        quiet_hours_start: null,
+        quiet_hours_end: null,
+        productive_window: "varies",
+        email_reminders: true,
+      },
+    ],
     plan_documents: [
       {
         id: "doc-1",

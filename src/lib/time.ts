@@ -21,6 +21,8 @@
  */
 const LOCALE = "en-US";
 
+export { browserTimeZone } from "./time-zone";
+
 export type Meridiem = "AM" | "PM";
 
 /** Hours as they appear in the picker: 12, 1, 2 … 11. */
@@ -61,6 +63,39 @@ export function formatTime(value: Date | string | number, timeZone?: string): st
     hour12: true,
     ...(timeZone ? { timeZone } : {}),
   }).format(date);
+}
+
+/**
+ * A calendar day, as words. "1 Oct"
+ *
+ * Days are not instants and must never be moved by a timezone. A deadline of
+ * "2026-10-01" read as midnight UTC and then formatted in Central Time reads
+ * as 30 September — a whole day earlier than the plan says. So day-valued
+ * fields (a deadline, a start-by date, a milestone's target) come through
+ * here, and only genuine moments (when a reminder is sent) take a zone.
+ */
+export function formatDayKey(day: string | null | undefined): string {
+  if (!day) return "";
+  const [year, month, date] = day.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !date) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, date)));
+}
+
+/** The same, with room for the weekday. "Thursday, 1 October" */
+export function formatLongDayKey(day: string | null | undefined): string {
+  if (!day) return "";
+  const [year, month, date] = day.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !date) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, date)));
 }
 
 /** A moment as a short date. "8 Sep" */
@@ -127,15 +162,6 @@ export function timeZoneLabel(timeZone: string): string {
   // "Asia/Kolkata" → "Kolkata". Better than an offset, and always available.
   const city = timeZone.split("/").pop()?.replace(/_/g, " ");
   return city && city !== timeZone ? `${city} time` : timeZone;
-}
-
-/** The visitor's zone, or null on a server render where there is no visitor. */
-export function browserTimeZone(): string | null {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
-  } catch {
-    return null;
-  }
 }
 
 /**

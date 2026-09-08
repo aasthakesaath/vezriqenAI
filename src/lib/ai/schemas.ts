@@ -41,6 +41,16 @@ export const ProvenanceSchema = z.object({
   confidence: z.number().min(0).max(1),
   excerpt: z.string().max(600).nullable(),
   page_or_section: z.string().max(200).nullable(),
+  /**
+   * What a date was worked out FROM, when it was not stated outright (§7).
+   *
+   * Plans are full of relative dates — "within five minutes", "before the
+   * first workshop", "post-Oct-30-2025 builds". Resolving one to a calendar
+   * day is an inference, and §7 does not allow an inference to sit next to an
+   * extracted fact without saying so. Null when the date was written in the
+   * document, or when there is no date.
+   */
+  date_anchor: z.string().max(200).nullable().default(null),
 });
 
 export type Provenance = z.infer<typeof ProvenanceSchema>;

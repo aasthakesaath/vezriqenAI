@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient, getUser } from "@/lib/supabase/server";
 import CalendarConnection from "@/components/app/CalendarConnection";
+import TimeZoneSetting from "@/components/app/TimeZoneSetting";
+import { settingsFromProfile } from "@/lib/user-settings";
 import ReminderPreferences from "@/components/app/ReminderPreferences";
 import { isCalendarConfigured } from "@/lib/calendar/google";
 import { getEmailProvider } from "@/lib/email";
@@ -31,7 +33,9 @@ export default async function SettingsPage({
   const [{ data: profile }, { data: connection }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("reminder_style, accountability_level, productive_window, email_reminders, quiet_hours_start, quiet_hours_end")
+      .select(
+        "reminder_style, accountability_level, productive_window, email_reminders, quiet_hours_start, quiet_hours_end, timezone, timezone_set_by_user",
+      )
       .eq("id", user.id)
       .maybeSingle(),
     supabase
@@ -40,6 +44,8 @@ export default async function SettingsPage({
       .eq("user_id", user.id)
       .maybeSingle(),
   ]);
+
+  const settings = settingsFromProfile(profile);
 
   return (
     <div className="shell max-w-2xl py-12 lg:py-16">
@@ -56,6 +62,8 @@ export default async function SettingsPage({
       </div>
 
       <div className="mt-8 space-y-6">
+        <TimeZoneSetting timeZone={settings.timeZone} />
+
         <ReminderPreferences
           reminderStyle={profile?.reminder_style ?? "both"}
           accountability={profile?.accountability_level ?? "balanced"}
@@ -64,6 +72,7 @@ export default async function SettingsPage({
           quietEnd={profile?.quiet_hours_end ?? null}
           emailReminders={profile?.email_reminders ?? true}
           emailConfigured={getEmailProvider().configured}
+          timeZone={settings.timeZone}
         />
 
         <CalendarConnection

@@ -5,9 +5,9 @@ import { useState } from "react";
 import ProvenanceBadge from "./ProvenanceBadge";
 import { APP_ROUTES } from "@/lib/routes";
 import { POSE_FOR, VezriPoseImage } from "@/components/VezriWorking";
-import { formatDay } from "@/lib/time";
+import { formatDayKey } from "@/lib/time";
 
-const shortDate = (value: string | null) => (value ? formatDay(value) : null);
+const shortDate = (value: string | null) => formatDayKey(value) || null;
 
 export type PlanMilestone = {
   id: string;

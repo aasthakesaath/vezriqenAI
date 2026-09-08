@@ -10,11 +10,14 @@ import { APP_ROUTES } from "@/lib/routes";
  * conversion CTAs — but still branded Vezriqen AI™ everywhere (PRD §30.7).
  */
 export default function AppHeader({
+  timeZone,
   name,
   reminders = [],
 }: {
   name?: string | null;
   reminders?: BellReminder[];
+  /** The user's zone, for the reminder times in the bell. */
+  timeZone: string;
 }) {
   return (
     // Opaque, not bg-white/90 + backdrop-blur. A translucent sticky header lets
@@ -41,7 +44,7 @@ export default function AppHeader({
 
         <div className="flex shrink-0 items-center gap-3">
           <AppNav />
-          <ReminderBell reminders={reminders} />
+          <ReminderBell reminders={reminders} timeZone={timeZone} />
           <form action="/api/auth/signout" method="post" className="hidden sm:block">
             <button
               type="submit"

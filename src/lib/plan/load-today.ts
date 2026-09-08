@@ -2,11 +2,18 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { backlogSummary, selectTodayCards, selectWaitingOn, type CandidateTask } from "./today";
+import { loadUserSettings } from "@/lib/user-settings";
 
 /** Loads every open task across the user's active goals and picks the day's cards. */
-export async function loadToday(options: { supabase: SupabaseClient; now?: Date }) {
+export async function loadToday(options: {
+  supabase: SupabaseClient;
+  now?: Date;
+  /** Overrides the profile lookup; the profile's zone is used when absent. */
+  timeZone?: string;
+}) {
   const { supabase } = options;
   const now = options.now ?? new Date();
+  const timeZone = options.timeZone ?? (await loadUserSettings(supabase)).timeZone;
 
   const { data: goals } = await supabase
     .from("goals")
@@ -23,6 +30,7 @@ export async function loadToday(options: { supabase: SupabaseClient; now?: Date 
       milestones: [],
       tasks: [],
       reminderFor: new Map<string, string>(),
+      timeZone,
     };
   }
 
@@ -96,12 +104,13 @@ export async function loadToday(options: { supabase: SupabaseClient; now?: Date 
   }));
 
   return {
-    cards: selectTodayCards(candidates, { now }),
+    cards: selectTodayCards(candidates, { now, timeZone }),
     waitingOn: selectWaitingOn(candidates),
-    backlog: backlogSummary(candidates, { now }),
+    backlog: backlogSummary(candidates, { now, timeZone }),
     goals: activeGoals,
     milestones: milestones ?? [],
     tasks: candidates,
     reminderFor: awaiting,
+    timeZone,
   };
 }

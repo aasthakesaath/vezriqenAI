@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PROFILE_QUESTIONS } from "@/lib/app-copy";
 import {
   HOUR_CHOICES,
   MERIDIEMS,
-  browserTimeZone,
   formatQuietHours,
   joinHour,
   splitHour,
@@ -87,6 +86,7 @@ export default function ReminderPreferences({
   quietEnd,
   emailReminders,
   emailConfigured,
+  timeZone,
 }: {
   reminderStyle: string;
   accountability: string;
@@ -96,6 +96,12 @@ export default function ReminderPreferences({
   emailReminders: boolean;
   /** Whether this deployment can actually send mail. */
   emailConfigured: boolean;
+  /**
+   * The zone quiet hours are actually enforced in — the one stored on the
+   * profile, not the one this browser happens to be set to. Naming the
+   * browser's zone here would promise a window the dispatcher does not keep.
+   */
+  timeZone: string;
 }) {
   const [values, setValues] = useState<Record<string, string>>({
     reminder_style: reminderStyle,
@@ -104,14 +110,7 @@ export default function ReminderPreferences({
   });
   const [quiet, setQuiet] = useState({ start: quietStart ?? 22, end: quietEnd ?? 7 });
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  /**
-   * Read after mount, not during render: the server has no visitor and would
-   * render its own zone, which then mismatches on hydration and — worse —
-   * would be wrong for everyone not sitting in the datacentre.
-   */
   const [email, setEmail] = useState(emailReminders);
-  const [timeZone, setTimeZone] = useState<string | null>(null);
-  useEffect(() => setTimeZone(browserTimeZone()), []);
 
   async function save(next: Record<string, unknown>) {
     setStatus("saving");

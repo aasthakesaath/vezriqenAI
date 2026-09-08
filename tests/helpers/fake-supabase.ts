@@ -140,6 +140,9 @@ export type FakeSupabase = {
   failWriteOnce: (table: string, message: string) => void;
 };
 
+/** The signed-in user the fake reports. Seed a `profiles` row with this id to give them settings. */
+export const FAKE_USER_ID = "user-1";
+
 export function fakeSupabase(seed: Tables): FakeSupabase {
   const db: Tables = structuredClone(seed);
   let pending: { table: string; message: string } | null = null;
@@ -153,6 +156,9 @@ export function fakeSupabase(seed: Tables): FakeSupabase {
 
   const client = {
     from: (table: string) => new Query(db, table, writeFails),
+    // Code under test reads the user's own settings (their timezone, above
+    // all) through the client, so the fake has to answer for them too.
+    auth: { getUser: async () => ({ data: { user: { id: FAKE_USER_ID } }, error: null }) },
     storage: { from: () => ({ download: async () => ({ data: null }) }) },
   } as unknown as SupabaseClient;
 

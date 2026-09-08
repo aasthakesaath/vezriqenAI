@@ -24,6 +24,33 @@ const PROVENANCE_RULES = `PROVENANCE — this is the rule you must not break:
   to null. A null date is correct; a guessed date is a defect.
 - confidence is your genuine certainty from 0 to 1, not a formality.`;
 
+/**
+ * How a date becomes a calendar day.
+ *
+ * Real plans date things relatively — "before the first workshop",
+ * "within five minutes", "post-Oct-30-2025 builds" — and half the milestones
+ * in a live plan came back with no date at all because of it. A null date is
+ * still better than a guess, but a date that CAN be resolved should be, and
+ * §7 requires it to say what it was resolved against.
+ */
+const DATE_RULES = `DATES — today's date is given below, and it is the only "now" you have:
+- A date stated in the document is used as written. date_anchor is null.
+- A RELATIVE reference ("two weeks after the pilot", "before the first
+  workshop", "within five minutes of the session") is resolved to a calendar
+  day ONLY when the thing it refers to has a date you already know. Put the
+  resolved day in the date field and say what you resolved it against in
+  date_anchor, in plain language: "two weeks after the 4 September gate".
+  Set origin="inferred" — you worked it out, the document did not say it.
+- If the reference has no anchor with a known date, leave the date null and put
+  the phrase itself in date_anchor: "before the first workshop". That tells the
+  user what is missing rather than leaving a blank.
+- NEVER guess a year. A date written without one ("30 October") resolves to the
+  first 30 October on or after today, and date_anchor says so. If that reading
+  is not obviously right, leave the date null.
+- A date already in the past is FINE and must be kept as written. Do not move
+  it forward to make the plan look current — the user is told about it and
+  decides what to do.`;
+
 const HORIZON_RULES = `SCOPE — a plan is not a task dump:
 - Extract every milestone the document defines, however far out.
 - Extract tasks only for the near horizon: the next 90 days, plus any task with
@@ -46,6 +73,8 @@ coach, a teacher, or another AI — and turn it into structured execution data.
 You are not writing the plan. You are understanding the one you were given.
 
 ${PROVENANCE_RULES}
+
+${DATE_RULES}
 
 ${HORIZON_RULES}
 
@@ -103,7 +132,8 @@ export function structurePrompt(input: {
     `This is the FIRST of two passes. In this pass, extract ONLY the goal-level
 information and the milestones. Do NOT extract tasks — a later pass does that,
 and tasks emitted here are discarded. Spend the effort on getting the milestone
-list complete and correctly dated instead.`,
+list complete and correctly dated instead — follow the DATE rules, and prefer a
+resolved date with an anchor over a blank.`,
   );
   return parts.join("\n\n");
 }

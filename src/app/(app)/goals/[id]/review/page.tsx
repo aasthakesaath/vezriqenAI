@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import PastPlanNotice from "@/components/plan/PastPlanNotice";
+import { describePastPlan, inspectPlanDates } from "@/lib/plan/reshape";
+import { dayKeyIn, toDayKey } from "@/lib/time-zone";
+import { loadUserSettings } from "@/lib/user-settings";
 import ReviewFlow from "@/components/plan/ReviewFlow";
 import DeleteDocumentButton from "@/components/app/DeleteDocumentButton";
 import { humanFileSize } from "@/lib/ingest/limits";
@@ -95,6 +99,21 @@ export default async function GoalReviewPage({ params }: { params: Promise<{ id:
   const document = documents?.[0] ?? null;
   const needsExtraction = !goal.normalized_goal;
 
+  // §14 — a plan brought in after its own start dates. Shown here, BEFORE the
+  // goal is started, because §6 says the user confirms the plan they will
+  // actually run; discovering half of it was overdue after Start Goal is too
+  // late to be a choice.
+  const { timeZone } = await loadUserSettings(supabase);
+  const pastPlan = inspectPlanDates({
+    today: dayKeyIn(new Date(), timeZone),
+    items: milestones.map((m) => ({
+      id: m.id,
+      title: m.title,
+      date: toDayKey(m.target_date),
+      done: m.status === "done",
+    })),
+  });
+
   return (
     <div className="shell max-w-3xl py-12 lg:py-16">
       <p className="eyebrow">Plan received</p>
@@ -113,6 +132,10 @@ export default async function GoalReviewPage({ params }: { params: Promise<{ id:
           {/* PRD §23 — delete the document and everything derived from it. */}
           <DeleteDocumentButton documentId={document.id} />
         </div>
+      )}
+
+      {pastPlan.isBehind && goal.target_date && (
+        <PastPlanNotice goalId={goal.id} summary={describePastPlan(pastPlan)} />
       )}
 
       <ReviewFlow

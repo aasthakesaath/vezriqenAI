@@ -5,6 +5,8 @@ import { getEmailProvider } from "@/lib/email";
 import { buildReminderEmail } from "@/lib/email/templates";
 import { hashToken } from "@/lib/crypto/tokens";
 import { SITE_URL } from "@/lib/env";
+import { isQuietHour } from "./send-time";
+import { hourIn, safeTimeZone } from "@/lib/time-zone";
 
 /**
  * Reminder delivery (PRD §12).
@@ -20,6 +22,12 @@ import { SITE_URL } from "@/lib/env";
  *     leave sent_at null, and the reminders table's check constraint makes the
  *     dishonest combination unrepresentable.
  *   * Failures are logged clearly rather than swallowed.
+ *   * QUIET HOURS are honoured here, on the user's clock. They were stored
+ *     from the day the setting shipped and compared against nothing, so a
+ *     window of "10 PM to 7 AM" was a promise the product never kept. A
+ *     reminder that comes due inside the window is LEFT PENDING and picked up
+ *     by a later run, not suppressed: it is a nudge the user asked for, and
+ *     dropping it would be a different broken promise.
  *
  * THE CHANNEL IS RESOLVED HERE, NOT AT SCHEDULE TIME. A reminder row carries
  * no email intent; this function reads profiles.email_reminders when the
@@ -36,9 +44,27 @@ export type DispatchSummary = {
   failed: number;
   /** Suppressed because the user turned the email channel off. */
   optedOut?: number;
+  /** Left pending because it came due inside the user's quiet hours. */
+  heldForQuietHours?: number;
   /** Present when no provider key is configured, for the caller to surface. */
   notice: string | null;
 };
+
+/**
+ * Is it the middle of the night where this person is?
+ *
+ * Their zone, not the server's: quiet hours of 10 PM to 7 AM mean nothing at
+ * all if the hours are read off a UTC clock.
+ */
+function isInQuietHours(
+  profile: { timezone?: string | null; quiet_hours_start?: number | null; quiet_hours_end?: number | null },
+  now: Date,
+): boolean {
+  const start = profile.quiet_hours_start ?? null;
+  const end = profile.quiet_hours_end ?? null;
+  if (start === null || end === null) return false;
+  return isQuietHour(hourIn(now, safeTimeZone(profile.timezone)), start, end);
+}
 
 /** §12: "Do not spam users with one email per low-value task." */
 function deservesEmail(reminder: { response_required: boolean; priority: number }): boolean {
@@ -82,7 +108,7 @@ export async function dispatchDueReminders(options: {
   const userIds = [...new Set(rows.map((r) => r.user_id))];
   const { data: profiles } = await admin
     .from("profiles")
-    .select("id, email, name, email_reminders")
+    .select("id, email, name, email_reminders, timezone, quiet_hours_start, quiet_hours_end")
     .in("id", userIds);
   const profileFor = new Map((profiles ?? []).map((p) => [p.id, p]));
 
@@ -115,6 +141,13 @@ export async function dispatchDueReminders(options: {
       normalized_goal?: string | null;
       user_goal_text?: string | null;
     } | null;
+
+    // Inside the user's quiet hours, on their clock. Left pending on purpose:
+    // the next run after the window closes will send it.
+    if (profile && isInQuietHours(profile, now)) {
+      summary.heldForQuietHours = (summary.heldForQuietHours ?? 0) + 1;
+      continue;
+    }
 
     // Not every reminder earns an email; the in-app row already exists either
     // way, so this is a delivery decision, not a visibility one.

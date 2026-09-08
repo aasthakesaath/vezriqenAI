@@ -13,9 +13,18 @@ import { POSE_FOR } from "@/lib/vezri-poses";
 import { goalLabel, goalStatement } from "@/lib/goal-label";
 import { isPlanView, milestoneProgress, planForView, type PlanView } from "@/lib/plan/views";
 import { APP_ROUTES, goalReviewPath } from "@/lib/routes";
-import { formatDay } from "@/lib/time";
+import { formatDayKey } from "@/lib/time";
+import { toDayKey } from "@/lib/time-zone";
+import { loadUserSettings } from "@/lib/user-settings";
+import MilestoneDate from "@/components/plan/MilestoneDate";
+import PastPlanNotice from "@/components/plan/PastPlanNotice";
+import { describePastPlan, inspectPlanDates } from "@/lib/plan/reshape";
+import { dayKeyIn } from "@/lib/time-zone";
 
-const shortDate = (value: string | null) => (value ? formatDay(value) : null);
+// Milestone targets, deadlines and start-by dates are calendar days. They are
+// formatted zone-free on purpose: shifting a day into a timezone prints the
+// day before for every reader west of Greenwich.
+const shortDate = (value: string | null) => formatDayKey(value) || null;
 
 export const metadata: Metadata = { title: "Goal", robots: { index: false } };
 
@@ -33,6 +42,7 @@ export default async function GoalDashboardPage({
   const view: PlanView = isPlanView(requested) ? requested : "today";
   const supabase = await createClient();
 
+  const { timeZone } = await loadUserSettings(supabase);
   const snapshot = await loadGoalSnapshot({ supabase, goalId: id });
   if (!snapshot) notFound();
 
@@ -45,7 +55,7 @@ export default async function GoalDashboardPage({
     await Promise.all([
       supabase
         .from("milestones")
-        .select("id, title, status, target_date, origin, confidence, sort_order")
+        .select("id, title, status, target_date, date_anchor, origin, confidence, sort_order")
         .eq("goal_id", id)
         .order("sort_order", { ascending: true }),
       supabase
@@ -69,6 +79,18 @@ export default async function GoalDashboardPage({
         .eq("goal_id", id)
         .order("created_at", { ascending: true }),
     ]);
+
+  // §14 — named once, at the top, instead of "should already have started" on
+  // every card below.
+  const pastPlan = inspectPlanDates({
+    today: dayKeyIn(new Date(), timeZone),
+    items: (milestones ?? []).map((m) => ({
+      id: m.id,
+      title: m.title,
+      date: m.target_date,
+      done: m.status === "done",
+    })),
+  });
 
   const label = goalLabel(snapshot.goal);
   const statement = goalStatement(snapshot.goal);
@@ -95,7 +117,7 @@ export default async function GoalDashboardPage({
     origin: t.origin as "explicit" | "inferred",
     confidence: Number(t.confidence),
   }));
-  const scoped = planForView(view, { milestones: planMilestones, tasks: planTasks });
+  const scoped = planForView(view, { milestones: planMilestones, tasks: planTasks, timeZone });
 
   return (
     <div className="shell max-w-3xl py-12 lg:py-16">
@@ -137,6 +159,10 @@ export default async function GoalDashboardPage({
         )}
       </Disclosure>
 
+      {pastPlan.isBehind && snapshot.goal.target_date && (
+        <PastPlanNotice goalId={id} summary={describePastPlan(pastPlan)} />
+      )}
+
       <PlanViewTabs goalId={id} current={view} />
 
       <section aria-label={`Plan for the ${view}`} className="mt-6 space-y-3">
@@ -158,7 +184,7 @@ export default async function GoalDashboardPage({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="font-semibold text-ink">{milestone.title}</h3>
                     <span className="text-sm text-mauve-light">
-                      {milestone.targetDate ? formatDay(milestone.targetDate) : "No date"}
+                      {shortDate(toDayKey(milestone.targetDate)) ?? "No date yet"}
                     </span>
                   </div>
                   {progress.total > 0 && (
@@ -186,8 +212,8 @@ export default async function GoalDashboardPage({
                       </div>
                       <div className="mt-1 flex flex-wrap gap-x-4 text-sm text-mauve-light">
                         {task.estimatedMinutes && <span>~{task.estimatedMinutes} min</span>}
-                        {task.startBy && <span>Start by {formatDay(task.startBy)}</span>}
-                        {task.deadline && <span>Due {formatDay(task.deadline)}</span>}
+                        {task.startBy && <span>Start by {shortDate(toDayKey(task.startBy))}</span>}
+                        {task.deadline && <span>Due {shortDate(toDayKey(task.deadline))}</span>}
                       </div>
                     </li>
                   ))}
@@ -229,9 +255,12 @@ export default async function GoalDashboardPage({
                   >
                     {milestone.title}
                   </span>
-                  <span className="text-sm text-mauve-light">
-                    {shortDate(milestone.target_date) ?? "No date"}
-                  </span>
+                  <MilestoneDate
+                    milestoneId={milestone.id}
+                    date={milestone.target_date}
+                    label={shortDate(milestone.target_date)}
+                    dateAnchor={milestone.date_anchor ?? null}
+                  />
                 </li>
               ))}
             </ul>

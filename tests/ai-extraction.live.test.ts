@@ -92,7 +92,7 @@ describe("provenance verification (PRD §7)", () => {
 
   it("keeps an explicit claim whose quote really is in the document", () => {
     const result = verifyProvenance(
-      { origin: "explicit", confidence: 0.9, excerpt: "two full practice tests", page_or_section: null },
+      { origin: "explicit", confidence: 0.9, excerpt: "two full practice tests", page_or_section: null, date_anchor: null },
       source,
     );
     expect(result.origin).toBe("explicit");
@@ -106,6 +106,7 @@ describe("provenance verification (PRD §7)", () => {
         confidence: 0.8,
         excerpt: "two   full\npractice tests",
         page_or_section: null,
+        date_anchor: null,
       },
       source,
     );
@@ -121,6 +122,7 @@ describe("provenance verification (PRD §7)", () => {
         confidence: 0.95,
         excerpt: "the exam is on 1 December",
         page_or_section: null,
+        date_anchor: null,
       },
       source,
     );
@@ -130,7 +132,7 @@ describe("provenance verification (PRD §7)", () => {
 
   it("demotes an explicit claim that carries no quote at all", () => {
     const result = verifyProvenance(
-      { origin: "explicit", confidence: 1, excerpt: null, page_or_section: null },
+      { origin: "explicit", confidence: 1, excerpt: null, page_or_section: null, date_anchor: null },
       source,
     );
     expect(result.origin).toBe("inferred");
@@ -138,7 +140,7 @@ describe("provenance verification (PRD §7)", () => {
 
   it("demotes every explicit claim when there is no source text (image plans)", () => {
     const result = verifyProvenance(
-      { origin: "explicit", confidence: 1, excerpt: "anything", page_or_section: null },
+      { origin: "explicit", confidence: 1, excerpt: "anything", page_or_section: null, date_anchor: null },
       null,
     );
     expect(result.origin).toBe("inferred");
@@ -146,7 +148,7 @@ describe("provenance verification (PRD §7)", () => {
 
   it("leaves inferred items untouched", () => {
     const result = verifyProvenance(
-      { origin: "inferred", confidence: 0.4, excerpt: null, page_or_section: null },
+      { origin: "inferred", confidence: 0.4, excerpt: null, page_or_section: null, date_anchor: null },
       source,
     );
     expect(result).toEqual({
@@ -154,6 +156,7 @@ describe("provenance verification (PRD §7)", () => {
       confidence: 0.4,
       excerpt: null,
       page_or_section: null,
+      date_anchor: null,
     });
   });
 });

@@ -120,6 +120,7 @@ export const EXPECTED_SCHEMA: Record<string, readonly string[]> = {
     "activated_at", // 0001_foundation.sql
     "constraints", // 0001_foundation.sql
     "created_at", // 0001_foundation.sql
+    "dates_reshaped_at", // 0008_timezone_and_dates.sql
     "health_score", // 0001_foundation.sql
     "health_status", // 0001_foundation.sql
     "id", // 0001_foundation.sql
@@ -135,6 +136,7 @@ export const EXPECTED_SCHEMA: Record<string, readonly string[]> = {
   "milestones": [
     "confidence", // 0002_plan_structure.sql
     "created_at", // 0002_plan_structure.sql
+    "date_anchor", // 0008_timezone_and_dates.sql
     "goal_id", // 0002_plan_structure.sql
     "id", // 0002_plan_structure.sql
     "origin", // 0002_plan_structure.sql
@@ -191,6 +193,7 @@ export const EXPECTED_SCHEMA: Record<string, readonly string[]> = {
     "quiet_hours_start", // 0001_foundation.sql
     "reminder_style", // 0001_foundation.sql
     "timezone", // 0001_foundation.sql
+    "timezone_set_by_user", // 0008_timezone_and_dates.sql
   ],
   "reminders": [
     "channel", // 0003_execution.sql
@@ -222,6 +225,7 @@ export const EXPECTED_SCHEMA: Record<string, readonly string[]> = {
     "completed_at", // 0002_plan_structure.sql
     "confidence", // 0002_plan_structure.sql
     "created_at", // 0002_plan_structure.sql
+    "date_anchor", // 0008_timezone_and_dates.sql
     "deadline", // 0002_plan_structure.sql
     "estimated_minutes", // 0002_plan_structure.sql
     "goal_id", // 0002_plan_structure.sql

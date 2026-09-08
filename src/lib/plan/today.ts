@@ -1,4 +1,11 @@
-import { formatDay } from "@/lib/time";
+import { formatDayKey } from "@/lib/time";
+import {
+  FALLBACK_TIME_ZONE,
+  dayKeyIn,
+  daysBetween,
+  toDayKey,
+  type DayKey,
+} from "@/lib/time-zone";
 
 /**
  * Choosing what to show on Today (PRD §17, §4.5).
@@ -68,8 +75,6 @@ export function groupByMilestone(cards: TodayCard[]): TodayGroup[] {
   return groups;
 }
 
-const DAY = 24 * 60 * 60 * 1000;
-
 const OPEN_STATUSES = new Set(["not_started", "in_progress", "unconfirmed", "partial"]);
 
 /**
@@ -109,16 +114,30 @@ function neutralReason(task: CandidateTask): string {
   }
 }
 
+/**
+ * Which day it is where the user is.
+ *
+ * Not where the server is. Vercel runs in UTC, so at 8 PM in Texas the code
+ * thought it was already tomorrow: a task due today read as overdue, and one
+ * due tomorrow read as due today.
+ */
+export function todayFor(options: { now?: Date; timeZone?: string } = {}): DayKey {
+  return dayKeyIn(options.now ?? new Date(), options.timeZone ?? FALLBACK_TIME_ZONE);
+}
+
 function score(
   task: CandidateTask,
-  now: Date,
+  today: DayKey,
   planBehind: boolean,
 ): { score: number; reason: string } {
   let value = (6 - task.priority) * 10;
   const reasons: string[] = [];
 
-  if (task.startBy) {
-    const daysUntilStart = (task.startBy.getTime() - now.getTime()) / DAY;
+  const startBy = toDayKey(task.startBy);
+  const deadline = toDayKey(task.deadline);
+
+  if (startBy) {
+    const daysUntilStart = daysBetween(today, startBy);
     if (daysUntilStart < 0) {
       value += Math.min(40, 15 + Math.abs(daysUntilStart) * 2);
       // Said once at the top of the screen when the whole plan is behind, so
@@ -132,14 +151,14 @@ function score(
     }
   }
 
-  if (task.deadline) {
-    const daysUntilDue = (task.deadline.getTime() - now.getTime()) / DAY;
+  if (deadline) {
+    const daysUntilDue = daysBetween(today, deadline);
     if (daysUntilDue < 0) {
       value += 25;
-      reasons.push(`the deadline was ${formatDay(task.deadline)}`);
+      reasons.push(`the deadline was ${formatDayKey(deadline)}`);
     } else if (daysUntilDue <= 3) {
       value += 20;
-      reasons.push(`it is due ${formatDay(task.deadline)}`);
+      reasons.push(`it is due ${formatDayKey(deadline)}`);
     } else if (daysUntilDue <= 14) {
       value += 8;
     }
@@ -166,12 +185,13 @@ function score(
  */
 export function backlogSummary(
   candidates: CandidateTask[],
-  options: { now?: Date } = {},
+  options: { now?: Date; timeZone?: string } = {},
 ): { behindCount: number; planBehind: boolean } {
-  const now = options.now ?? new Date();
-  const behindCount = candidates.filter(
-    (t) => OPEN_STATUSES.has(t.status) && t.startBy && t.startBy.getTime() < now.getTime(),
-  ).length;
+  const today = todayFor(options);
+  const behindCount = candidates.filter((t) => {
+    const startBy = toDayKey(t.startBy);
+    return OPEN_STATUSES.has(t.status) && startBy !== null && startBy < today;
+  }).length;
   return { behindCount, planBehind: behindCount >= 2 };
 }
 
@@ -184,9 +204,9 @@ export function backlogSummary(
  */
 export function selectTodayCards(
   candidates: CandidateTask[],
-  options: { now?: Date; limit?: number } = {},
+  options: { now?: Date; timeZone?: string; limit?: number } = {},
 ): TodayCard[] {
-  const now = options.now ?? new Date();
+  const today = todayFor(options);
   const limit = options.limit ?? 3;
 
   // §13 — "This is not in your control right now. I'll ... move you to the next
@@ -198,11 +218,11 @@ export function selectTodayCards(
   const open = candidates.filter((t) => OPEN_STATUSES.has(t.status) && !t.blockedOnPerson);
   if (open.length === 0) return [];
 
-  const { planBehind } = backlogSummary(candidates, { now });
+  const { planBehind } = backlogSummary(candidates, options);
 
   const scored: TodayCard[] = open
     .map((task) => {
-      const { score: urgencyScore, reason } = score(task, now, planBehind);
+      const { score: urgencyScore, reason } = score(task, today, planBehind);
       return { ...task, urgencyScore, reason };
     })
     .sort((a, b) => b.urgencyScore - a.urgencyScore);

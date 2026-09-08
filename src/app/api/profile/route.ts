@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { SUPABASE_CONFIGURED } from "@/lib/env";
+import { isValidTimeZone } from "@/lib/time-zone";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,21 @@ const ProfileSchema = z
     email_reminders: z.boolean().optional(),
     quiet_hours_start: z.number().int().min(0).max(23).nullable().optional(),
     quiet_hours_end: z.number().int().min(0).max(23).nullable().optional(),
-    timezone: z.string().max(64).optional(),
+    // An IANA name the runtime actually knows. A zone Intl cannot format is
+    // worse than no zone at all: it would throw on every date the user sees.
+    timezone: z
+      .string()
+      .max(64)
+      .refine(isValidTimeZone, "Unknown timezone")
+      .optional(),
+    /**
+     * True when the user picked the zone themselves in Settings.
+     *
+     * The browser capture sends this false (or omits it), and the server
+     * refuses to let that overwrite a zone someone chose by hand — so a
+     * traveller's laptop cannot quietly move their reminders.
+     */
+    timezone_chosen: z.boolean().optional(),
   })
   .strict();
 
@@ -33,11 +48,31 @@ export async function PATCH(request: Request) {
   const parsed = ProfileSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid setting." }, { status: 400 });
 
+  const { timezone_chosen: chosen, ...fields } = parsed.data;
+  const update: Record<string, unknown> = { ...fields };
+
+  if (fields.timezone !== undefined) {
+    if (chosen) {
+      update.timezone_set_by_user = true;
+    } else {
+      // Automatic capture. Read the flag first rather than trusting the
+      // caller: this endpoint is reachable by anything holding the session.
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("timezone_set_by_user")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (existing?.timezone_set_by_user) delete update.timezone;
+    }
+  }
+
   const { data, error } = await supabase
     .from("profiles")
-    .update(parsed.data)
+    .update(update)
     .eq("id", user.id)
-    .select("reminder_style, accountability_level, productive_window, email_reminders, quiet_hours_start, quiet_hours_end")
+    .select(
+      "reminder_style, accountability_level, productive_window, email_reminders, quiet_hours_start, quiet_hours_end, timezone, timezone_set_by_user",
+    )
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

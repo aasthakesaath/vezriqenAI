@@ -1,5 +1,6 @@
 import { createEmailActionToken } from "@/lib/crypto/tokens";
-import { formatLongDay } from "@/lib/time";
+import { formatLongDayKey } from "@/lib/time";
+import { toDayKey } from "@/lib/time-zone";
 
 /**
  * Reminder emails (PRD §12).
@@ -25,9 +26,15 @@ export type ReminderEmailInput = {
   responseRequired: boolean;
 };
 
-/** Every user-visible time and date in the product goes through @/lib/time. */
+/**
+ * Every user-visible date in the product goes through @/lib/time.
+ *
+ * A start-by date is a calendar day, so it is formatted zone-free. Formatting
+ * it in a zone would print the day before for every reader west of Greenwich.
+ */
 function formatDate(date: Date | null): string | null {
-  return date ? formatLongDay(date) : null;
+  const day = toDayKey(date);
+  return day ? formatLongDayKey(day) : null;
 }
 
 function actionLink(

@@ -25,7 +25,14 @@ export type BellReminder = {
  * Shows what is due and what happened recently. Answering still happens on
  * Today, where the task and its check-in actions are.
  */
-export default function ReminderBell({ reminders }: { reminders: BellReminder[] }) {
+export default function ReminderBell({
+  reminders,
+  timeZone,
+}: {
+  reminders: BellReminder[];
+  /** The user's own zone. A reminder time is a moment, so it needs one. */
+  timeZone: string;
+}) {
   const [open, setOpen] = useState(false);
   const dueCount = reminders.filter((r) => r.due && !r.answered).length;
 
@@ -76,7 +83,7 @@ export default function ReminderBell({ reminders }: { reminders: BellReminder[] 
                 >
                   <p className="text-sm font-medium text-ink">{reminder.taskTitle}</p>
                   <p className="mt-0.5 text-xs text-mauve">
-                    {formatDayTime(reminder.scheduledAt)}
+                    {formatDayTime(reminder.scheduledAt, timeZone)}
                     {" · "}
                     {/* §12 — silence is never completion. */}
                     {reminder.answered ? "Answered" : reminder.due ? "Needs an answer" : "Upcoming"}

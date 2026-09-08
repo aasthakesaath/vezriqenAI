@@ -2,6 +2,9 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { planReminders, type TaskType } from "./lead-time";
+import { WINDOW_TIME, reminderInstant } from "@/lib/reminders/send-time";
+import { loadUserSettings } from "@/lib/user-settings";
+import { dayKeyIn, toDayKey } from "@/lib/time-zone";
 
 /**
  * Materialises the reminder plan for an activated goal (PRD §12).
@@ -27,6 +30,12 @@ import { planReminders, type TaskType } from "./lead-time";
  *                 reachable, and "did this happen?" is still a live question
  *                 for work that slipped. It surfaces in the in-app centre as
  *                 due, which is a list, not six pings.
+ *
+ * WHAT TIME OF DAY. A reminder date is a DAY; the moment it lands is chosen
+ * here, on the user's clock, from their productive window and outside their
+ * quiet hours. Before this it was implicit — the date string parsed as
+ * midnight UTC — so every reminder arrived at 6 or 7 PM the evening BEFORE for
+ * anyone west of Greenwich.
  */
 export async function scheduleRemindersForGoal(options: {
   supabase: SupabaseClient;
@@ -34,6 +43,8 @@ export async function scheduleRemindersForGoal(options: {
   goalId: string;
 }): Promise<number> {
   const { supabase, userId, goalId } = options;
+  const settings = await loadUserSettings(supabase);
+  const localTime = WINDOW_TIME[settings.productiveWindow];
 
   const { data: tasks } = await supabase
     .from("tasks")
@@ -52,6 +63,7 @@ export async function scheduleRemindersForGoal(options: {
     .eq("delivery_status", "pending");
 
   const now = Date.now();
+  const today = dayKeyIn(new Date(now), settings.timeZone);
   const rows: Array<Record<string, unknown>> = [];
 
   for (const task of tasks) {
@@ -63,14 +75,25 @@ export async function scheduleRemindersForGoal(options: {
     });
 
     for (const plan of plans) {
-      const isPast = plan.scheduledAt.getTime() <= now;
+      // The day the reminder belongs to, then the time of day on that day.
+      const day = toDayKey(plan.scheduledAt);
+      if (!day) continue;
+      const at = reminderInstant({
+        day,
+        time: localTime,
+        timeZone: settings.timeZone,
+        quietStart: settings.quietHoursStart,
+        quietEnd: settings.quietHoursEnd,
+      });
+
+      const isPast = day < today || at.getTime() <= now;
 
       // A heads-up about work that has already started is noise.
       if (isPast && plan.type === "heads_up") continue;
 
       // A checkpoint that came due before the goal was started is still worth
       // asking; it arrives as due rather than as a missed date.
-      const scheduledAt = isPast ? new Date(now) : plan.scheduledAt;
+      const scheduledAt = isPast ? new Date(now) : at;
 
       rows.push({
         user_id: userId,
