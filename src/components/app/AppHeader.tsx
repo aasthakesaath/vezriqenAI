@@ -14,11 +14,11 @@ export default function AppHeader({ name }: { name?: string | null }) {
         <Link href={APP_ROUTES.today} className="flex items-center gap-2.5" aria-label={`${BRAND} home`}>
           <span className="relative block h-9 w-9 shrink-0 overflow-hidden rounded-full bg-blush-wash ring-1 ring-blush">
             <Image
-              src="/brand/vezri.webp"
+              src="/brand/vezri-avatar.webp"
               alt=""
-              width={72}
-              height={72}
-              className="h-full w-full scale-[2.6] object-cover object-[38%_18%]"
+              width={256}
+              height={256}
+              className="h-full w-full"
             />
           </span>
           <span className="block text-[1.35rem] font-bold tracking-tight text-berry">{BRAND}</span>

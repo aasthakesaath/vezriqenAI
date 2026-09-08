@@ -65,11 +65,11 @@ export default function ProgressPreview() {
 
           <div className="mt-4 flex items-center gap-3 rounded-xl bg-blush-light px-3 py-2.5">
             <Image
-              src="/brand/vezri.webp"
+              src="/brand/vezri-avatar.webp"
               alt=""
-              width={96}
-              height={96}
-              className="h-9 w-9 shrink-0 scale-[2.4] rounded-full object-cover object-[38%_16%]"
+              width={256}
+              height={256}
+              className="h-9 w-9 shrink-0 rounded-full"
             />
             <p className="text-sm text-mauve">
               You&rsquo;re doing great. Small steps, big wins.

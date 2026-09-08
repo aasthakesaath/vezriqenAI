@@ -11,6 +11,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AuthPanel from "@/components/AuthPanel";
 import VezriWorking from "@/components/VezriWorking";
+import ProgressPreview from "@/components/ProgressPreview";
 import {
   BRAND,
   CTA_PRIMARY,
@@ -296,6 +297,30 @@ describe("Vezri working state (shared model-call loading component)", () => {
       <VezriWorking stages={UNDERSTANDING_STEPS} error="Nope." onRetry={() => {}} />,
     );
     expect(withRetry).toContain("Try again");
+  });
+});
+
+describe("the Vezri avatar", () => {
+  const preview = html(<ProgressPreview />);
+
+  it("is a real cropped asset everywhere a small circle is drawn", () => {
+    // Not the full-body art zoomed with CSS: those offsets only framed the
+    // head at one exact box size, and upscaled it out of a downscaled render.
+    for (const markup of [header, footer, preview]) {
+      expect(markup).toContain("/brand/vezri-avatar.webp");
+    }
+  });
+
+  it("never re-derives the crop in CSS", () => {
+    for (const markup of [header, footer, preview]) {
+      expect(markup).not.toMatch(/scale-\[2\.\d/);
+      expect(markup).not.toMatch(/object-\[\d+%_\d+%\]/);
+    }
+  });
+
+  it("stays decorative — the wordmark's own text carries the name", () => {
+    expect(header).toContain('alt=""');
+    expect(headerText).toContain(BRAND);
   });
 });
 

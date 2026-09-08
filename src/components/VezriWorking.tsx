@@ -112,10 +112,10 @@ export default function VezriWorking({
 /**
  * The approved mascot asset, whole and uncropped.
  *
- * The header's circular avatar crops to the head with a scale-and-offset; at
- * this size that same crop lands on the quiver rather than the face, so the
- * figure is shown in full instead. Same file, no new artwork and no new pose
- * — PRD §30.2 allows only the existing Vezri assets.
+ * The full figure rather than vezri-avatar.webp: the avatar is built for a
+ * small circular mask, and this card has the room to show Vezri actually at
+ * work — bow drawn, which is the point of the moment. Same source file, no new
+ * artwork and no new pose; PRD §30.2 allows only the existing Vezri assets.
  */
 function VezriPortrait({ still = false }: { still?: boolean }) {
   return (

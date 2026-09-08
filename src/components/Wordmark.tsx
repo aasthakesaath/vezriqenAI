@@ -5,13 +5,19 @@ import { BRAND, BRAND_LINE, ROUTES } from "@/lib/site";
 export default function Wordmark({ compact = false }: { compact?: boolean }) {
   return (
     <Link href={ROUTES.home} className="flex items-center gap-2.5" aria-label={`${BRAND} home`}>
+      {/* A real cropped avatar, not the full-body art zoomed with CSS.
+          scale-[2.6] + object-position re-derived the crop at every call site
+          and only framed the head at one exact box size — the identical pair
+          applied to an 80px box lands on the quiver. It also upscaled the head
+          out of an already-downscaled full-body render, so it arrived soft;
+          256 square pixels of actual head is sharper and slightly smaller. */}
       <span className="relative block h-9 w-9 shrink-0 overflow-hidden rounded-full bg-blush-wash ring-1 ring-blush">
         <Image
-          src="/brand/vezri.webp"
+          src="/brand/vezri-avatar.webp"
           alt=""
-          width={72}
-          height={72}
-          className="h-full w-full scale-[2.6] object-cover object-[38%_18%]"
+          width={256}
+          height={256}
+          className="h-full w-full"
         />
       </span>
       <span className="leading-none">
