@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-script: ui-rounded, "Segoe UI", system-ui, cursive;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5.5rem;
+  }
+
+  body {
+    @apply bg-white text-ink antialiased;
+    font-family: var(--font-sans);
+  }
+
+  /* PRD §30.11 — visible focus states everywhere. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-berry ring-offset-2 ring-offset-white rounded-sm;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .shell {
+    @apply mx-auto w-full max-w-shell px-5 sm:px-8;
+  }
+
+  /* Primary CTA — one visual treatment, used in header, hero and final CTA. */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill bg-berry px-7 py-3.5
+           text-base font-semibold text-white shadow-soft transition-colors
+           hover:bg-berry-deep active:bg-berry-deep;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-pill border border-blush bg-white
+           px-6 py-3 text-base font-semibold text-berry transition-colors hover:bg-blush-wash;
+  }
+
+  .eyebrow {
+    @apply text-sm font-semibold tracking-wide text-berry;
+  }
+
+  /* Handwritten margin notes from the approved mockup. Decorative only. */
+  .note {
+    @apply font-script text-rose;
+  }
+}
