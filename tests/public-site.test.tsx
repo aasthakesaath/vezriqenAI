@@ -72,12 +72,24 @@ describe("branding (PRD §30.2, §30.13)", () => {
 });
 
 describe("navigation (PRD §30.4, §30.9, §30.13)", () => {
-  it("shows How It Works, My Story ♥, Privacy, Sign In and Sign Up Free", () => {
+  it("shows How It Works, My Story ♥, Sign In and Sign Up Free", () => {
     expect(headerText).toContain("How It Works");
     expect(headerText).toContain(MY_STORY_LABEL);
-    expect(headerText).toContain("Privacy");
     expect(headerText).toContain("Sign In");
     expect(headerText).toContain(CTA_PRIMARY);
+  });
+
+  /**
+   * Privacy was removed from the top menu by the owner (2026-09-08), which
+   * departs from PRD §30.4's listed order. The policy must still be one click
+   * from every page, so this asserts the thing that actually matters: it left
+   * the header AND it is still in the footer. Dropping it from both would be a
+   * legal problem, not a design choice.
+   */
+  it("keeps Privacy out of the header but reachable from the footer", () => {
+    expect(headerText).not.toContain("Privacy");
+    expect(footerText).toContain("Privacy");
+    expect(footer).toContain(`href="${ROUTES.privacy}"`);
   });
 
   it("keeps the heart in the My Story label in header and footer", () => {

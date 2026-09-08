@@ -26,11 +26,17 @@ export const ROUTES = {
   signUp: "/signup",
 } as const;
 
-/** PRD §30.4 — desktop header order. No Pricing, no Contact. */
+/**
+ * Desktop header order. No Pricing, no Contact.
+ *
+ * PRD §30.4 also lists Privacy here, but the owner removed it from the top
+ * menu (2026-09-08). Privacy remains in the footer, which §30.9 requires and
+ * which keeps the policy one click away from every page — the legal
+ * obligation is reachability, not placement in the primary nav.
+ */
 export const HEADER_NAV = [
   { label: "How It Works", href: ROUTES.howItWorks },
   { label: MY_STORY_LABEL, href: ROUTES.about },
-  { label: "Privacy", href: ROUTES.privacy },
 ] as const;
 
 /** PRD §30.9 — small, quiet footer. No Contact. */

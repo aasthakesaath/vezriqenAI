@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { FEEDBACK_TOPICS, sanitizePagePath } from "@/lib/feedback";
 
-const TOPICS = ["Something is broken", "A suggestion", "A question", "Something else"] as const;
+const TOPICS = FEEDBACK_TOPICS;
 
 type Status = { kind: "idle" | "sending" | "sent" | "error"; message?: string };
 
@@ -23,7 +24,20 @@ export default function FeedbackForm() {
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, email: email.trim(), message: message.trim() }),
+        body: JSON.stringify({
+          topic,
+          message: message.trim(),
+          // Named `contact` to match the ported Meriqen contract: it is a
+          // reply-to address, not an account identifier, and it is optional.
+          contact: email.trim(),
+          // Which page the reporter came from, when the link carried it.
+          // Read at submit time so this page stays statically renderable, and
+          // sanitised on both ends — the API re-checks it.
+          page:
+            typeof window === "undefined"
+              ? null
+              : sanitizePagePath(new URLSearchParams(window.location.search).get("from")),
+        }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {

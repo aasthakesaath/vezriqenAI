@@ -90,7 +90,7 @@ Needed now:
 | `NEXT_PUBLIC_SITE_URL` | Canonical URL for metadata |
 | `NEXT_PUBLIC_LEGAL_OWNER` | Footer and legal pages — do not hardcode an unverified entity (§30.8) |
 | `NEXT_PUBLIC_LEGAL_CONTACT_EMAIL` | Contact address on legal pages |
-| `FEEDBACK_WEBHOOK_URL` | Where feedback is delivered. **Without it the form returns an error rather than silently dropping messages.** |
+| `FEEDBACK_EMAIL_TO` | Where feedback is delivered. **Without a working email provider the form says it did not send, rather than pretending it did.** |
 
 ### Supabase
 
@@ -203,8 +203,12 @@ reach production, whoever pushed it.
   is sampled from the approved mockup's own CTA.
 - **Copy lives in `src/lib/site.ts`**, not inline in components, so the tests
   assert against the specification rather than a retyped duplicate.
-- **The feedback API never silently succeeds.** With no `FEEDBACK_WEBHOOK_URL`
-  configured it returns a 503 telling the user to email instead.
+- **Feedback and email auth are ported from the sibling products, not
+  rewritten.** The public feedback route comes from Meriqen (no session, stores
+  nothing, and never claims a delivery it did not achieve); email sign-in,
+  sign-up and password reset come from Calyqen, including its deliberately
+  vague sign-in error, which exists so the form cannot be used to discover
+  whether someone has an account here.
 - **Google sign-in requests `openid email profile` only.** Calendar access is a
   separate consent step (§5, §23, §30.7).
 - **The founder portrait is real and approved.** §30.6 forbids a generated one.

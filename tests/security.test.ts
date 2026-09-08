@@ -107,14 +107,23 @@ describe("every API route is either authenticated or deliberately public (PRD §
 });
 
 describe("redirects cannot leave the site (PRD §23)", () => {
-  it("rejects protocol-relative URLs on both ends of sign-in", () => {
+  it("routes every redirect destination through the one shared guard", () => {
     for (const file of [
       join(SRC, "app", "api", "auth", "google", "start", "route.ts"),
       join(SRC, "app", "api", "auth", "google", "callback", "route.ts"),
+      join(SRC, "lib", "auth", "actions.ts"),
     ]) {
       const source = read(file);
-      expect(source, `${rel(file)} must reject "//"`).toContain('startsWith("//")');
+      expect(source, `${rel(file)} must use safeNextDestination`).toContain(
+        "safeNextDestination",
+      );
     }
+  });
+
+  it("keeps the guard itself rejecting protocol-relative URLs", () => {
+    const guard = read(join(SRC, "lib", "auth", "next-destination.ts"));
+    expect(guard).toContain('startsWith("//")');
+    expect(guard).toContain('startsWith("/\\\\")');
   });
 });
 

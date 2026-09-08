@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { SUPABASE_CONFIGURED } from "@/lib/env";
 import { SIGN_IN_SCOPE_STRING, SIGN_IN_SCOPES, assertNoCalendarScope } from "@/lib/auth/scopes";
+import { safeNextDestination } from "@/lib/auth/next-destination";
 
 export const runtime = "nodejs";
 
@@ -24,16 +25,16 @@ export async function POST(request: Request) {
   assertNoCalendarScope(SIGN_IN_SCOPES);
 
   const form = await request.formData().catch(() => null);
-  const next = typeof form?.get("next") === "string" ? String(form.get("next")) : "/start";
 
   const origin = new URL(request.url).origin;
   const callback = new URL("/api/auth/google/callback", origin);
-  // Only same-site paths survive, so `next` cannot be used as an open redirect.
-  // "//evil.com" is a protocol-relative URL and starts with "/", so the second
-  // check is the one that actually matters. The callback re-validates too;
+  // One implementation of the open-redirect guard, shared with the email
+  // actions — see lib/auth/next-destination.ts. The callback re-validates too;
   // both ends check because either one being the sole guard is a bad shape.
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/start";
-  callback.searchParams.set("next", safeNext);
+  callback.searchParams.set(
+    "next",
+    safeNextDestination(form?.get("next") as string | null),
+  );
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({

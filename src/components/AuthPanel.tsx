@@ -2,6 +2,7 @@ import Link from "next/link";
 import Wordmark from "@/components/Wordmark";
 import { BRAND, CTA_SUPPORT, ROUTES } from "@/lib/site";
 import { SUPABASE_CONFIGURED } from "@/lib/env";
+import EmailAuthForm from "@/components/EmailAuthForm";
 
 function GoogleMark() {
   return (
@@ -48,6 +49,19 @@ export default function AuthPanel({ mode }: { mode: "signin" | "signup" }) {
           <code className="font-semibold">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
           <code className="font-semibold">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to enable it.
         </p>
+      )}
+
+      {/* PRD §30.7 keeps Continue with Google prominent; email is the
+          alternative beneath it, not a competing primary. */}
+      {SUPABASE_CONFIGURED && (
+        <>
+          <div className="mt-6 flex w-full items-center gap-3" aria-hidden="true">
+            <span className="h-px flex-1 bg-blush" />
+            <span className="text-xs font-medium uppercase tracking-wide text-mauve-light">or</span>
+            <span className="h-px flex-1 bg-blush" />
+          </div>
+          <EmailAuthForm mode={mode} />
+        </>
       )}
 
       {isSignUp && <p className="mt-5 text-sm text-mauve-light">{CTA_SUPPORT}</p>}
