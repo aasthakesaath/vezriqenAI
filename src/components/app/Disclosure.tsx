@@ -29,21 +29,32 @@ export default function Disclosure({
   children,
   defaultOpen = false,
   className = "",
+  headingLevel = "h3",
 }: {
   /** What opens. A noun phrase, not "click here". */
   label: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
   className?: string;
+  /**
+   * The heading this disclosure is, in the page's outline.
+   *
+   * USWDS puts the button inside a heading of the level the content sits at,
+   * and a level is only correct relative to what is above it: under an h1 this
+   * has to be an h2, and axe reports the skipped level as a real failure. The
+   * caller knows its own outline; this component cannot.
+   */
+  headingLevel?: "h2" | "h3" | "h4";
 }) {
   const id = useId();
   const panelId = `${id}-panel`;
   const buttonId = `${id}-button`;
   const [open, setOpen] = useState(defaultOpen);
+  const Heading = headingLevel;
 
   return (
     <div className={className}>
-      <h3 className="m-0">
+      <Heading className="m-0">
         <button
           type="button"
           id={buttonId}
@@ -66,7 +77,7 @@ export default function Disclosure({
             <path d="M5 9l7 7 7-7" />
           </svg>
         </button>
-      </h3>
+      </Heading>
       {/* `hidden`, not unmounted: the content is still findable and still
           announced in document order when it opens. */}
       <div

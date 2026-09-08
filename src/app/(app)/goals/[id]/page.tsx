@@ -248,7 +248,7 @@ export default async function GoalDashboardPage({
         {/* Collapsed by default, and the ONE place the full statement can be
           opened. §6 requires the approved wording be preserved; a heading
           requires six words. Both are true here, one tap apart. */}
-        <Disclosure label="Show full target" className="mt-5">
+        <Disclosure label="Show full target" className="mt-5" headingLevel="h2">
         <p className="text-[1.02rem] leading-relaxed text-ink">{goalStatement(snapshot.goal)}</p>
         {snapshot.goal.success_criteria.length > 0 && (
           <>

@@ -75,9 +75,11 @@ export default function HealthCard({
 
       <dl className="mt-4 space-y-2">
         {shown.map((factor) => (
-          <div key={factor.id} className="flex flex-wrap items-baseline justify-between gap-2">
-            <dt className="text-[0.95rem] text-ink">{factor.label}</dt>
-            <dd className="text-sm text-mauve">{factor.summary}</dd>
+          // The summary keeps to its own side when it wraps: a factor line
+          // that wraps and then left-aligns reads as a second factor.
+          <div key={factor.id} className="flex items-baseline justify-between gap-3">
+            <dt className="shrink-0 text-[0.95rem] text-ink">{factor.label}</dt>
+            <dd className="min-w-0 text-right text-sm text-mauve">{factor.summary}</dd>
           </div>
         ))}
       </dl>
