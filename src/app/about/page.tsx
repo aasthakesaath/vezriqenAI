@@ -4,7 +4,6 @@ import { FinalCta } from "@/components/Cta";
 import {
   BRAND,
   FOUNDER,
-  FOUNDER_PORTRAIT_SRC,
   MY_STORY_LABEL,
   MY_STORY_PARAGRAPHS,
   MY_STORY_PARAGRAPHS_AFTER,
@@ -14,14 +13,18 @@ import {
 } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: `${MY_STORY_LABEL} \u2014 Why I Built ${BRAND}`,
+  title: `${MY_STORY_LABEL} — Why I Built ${BRAND}`,
   description: `Why ${FOUNDER.name} built ${BRAND}: a real student, a real problem, and a bigger purpose.`,
 };
+
+/** The artwork's real dimensions. next/image needs them to reserve the space. */
+const HERO_WIDTH = 1448;
+const HERO_HEIGHT = 1086;
 
 const PILLARS = [
   {
     title: "A Personal Challenge",
-    body: "SAT prep taught me that having a plan isn't the hard part \u2014 following it is.",
+    body: "SAT prep taught me that having a plan isn't the hard part — following it is.",
     icon: <path d="M12 20.5s-7.5-4.6-7.5-9.6A4.4 4.4 0 0112 8.6a4.4 4.4 0 017.5 2.3c0 5-7.5 9.6-7.5 9.6z" />,
   },
   {
@@ -31,7 +34,7 @@ const PILLARS = [
   },
   {
     title: "For Every Dream",
-    body: "Whether it's an exam, a healthier you, or a big idea \u2014 your goals matter.",
+    body: "Whether it's an exam, a healthier you, or a big idea — your goals matter.",
     icon: (
       <>
         <circle cx="9" cy="8.5" r="3" />
@@ -46,7 +49,65 @@ const PILLARS = [
   },
 ];
 
-/** PRD §30.6 heading block — one definition, used by both layouts. */
+/**
+ * The story artwork, across the top of the page.
+ *
+ * It is 1448×1086 — 4:3 landscape — and it replaced a square portrait that sat
+ * in a sidebar. That is the whole reason this is a hero and not a column: a
+ * landscape picture holding two subjects, dropped into a portrait slot, is
+ * either letterboxed down to a stripe or cropped straight through a face.
+ *
+ * Where the crop happens, and where it does not:
+ *
+ *   under 640px  aspect-[4/3] — the artwork's own ratio, so nothing is cut at
+ *                all. On a phone the whole picture is the point; losing the
+ *                sunset to make it shorter is not a trade worth making.
+ *   640px and up the box widens to 3/2 and then 16/10. A box WIDER than 4:3
+ *                overflows vertically, never horizontally, so the crop takes
+ *                sky and hem — Nikita on the left and the target on the right
+ *                are both fully in frame at every width.
+ *
+ * `object-left` is still set, and deliberately. It costs nothing while the box
+ * stays wide, and it is the safety net for the one change that would otherwise
+ * quietly cut the subject in half: someone giving this box a narrow or square
+ * ratio later. The default is centre, which would take the crop out of both
+ * edges — Nikita's face off one side, the target off the other.
+ *
+ * How deep the crop may go is set by Vezri, not by taste. Her head is about
+ * 13% down the artwork, so the top of the frame is the constraint: 16/10 takes
+ * 8.3% off each edge and clears her; 16/9 takes 12.5% and grazes the bow in
+ * her hair; 21/9, which this box used before the artwork existed, takes 21.5%
+ * and removes her head entirely.
+ */
+function StoryHero({ src }: { src: string }) {
+  return (
+    <figure className="mt-10">
+      {/* max-w-[1200px]: the shell is already this wide, but the cap is stated
+          here so the hero cannot grow if the shell ever does. */}
+      <div className="mx-auto max-w-[1200px]">
+        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[1.75rem] bg-blush-light shadow-lift sm:aspect-[3/2] lg:aspect-[16/10]">
+          <Image
+            src={src}
+            alt={STORY_IMAGE_ALT}
+            width={HERO_WIDTH}
+            height={HERO_HEIGHT}
+            priority
+            // The hero is full-bleed inside the shell up to its 1200px cap, so
+            // a phone is told 100vw and asks for a ~375-750px rendition rather
+            // than the 1448px original.
+            sizes="(max-width: 1200px) 100vw, 1200px"
+            className="absolute inset-0 h-full w-full object-cover object-left"
+          />
+        </div>
+        <figcaption className="note mt-4 text-center text-xl leading-tight">
+          Real challenges. Brighter tomorrow. <span aria-hidden="true">&hearts;</span>
+        </figcaption>
+      </div>
+    </figure>
+  );
+}
+
+/** PRD §30.6 heading block. */
 function StoryHeading() {
   return (
     <>
@@ -61,7 +122,7 @@ function StoryHeading() {
   );
 }
 
-/** The approved narrative and signature, §30.6. Rendered once, shared. */
+/** The approved narrative and signature, §30.6. */
 function StoryProse() {
   return (
     <>
@@ -112,110 +173,34 @@ function Pillars({ className = "" }: { className?: string }) {
 }
 
 /**
- * My Story with the wide founder-and-Vezri artwork as the hero (owner
- * decision, 2026-09-08).
+ * My Story (PRD §30.6), built around the wide artwork.
  *
- * The artwork is landscape and holds two subjects, so it gets the full column
- * width above the narrative rather than the portrait slot beside it — a square
- * crop would cut Vezri out of a picture that exists to show them together.
- * object-position sits left of centre so both faces survive the wider crops at
- * larger breakpoints.
+ * One column, hero first. The two-column arrangement that used to be here put
+ * the narrative beside a square portrait; with the portrait retired there is
+ * nothing left for the text to sit beside, and a lone column of prose running
+ * the full width of a 1200px shell is ~110 characters a line. `max-w-prose` is
+ * 65ch, which is inside the 45–75 the typographic literature settles on and is
+ * why the reading column is narrower than the picture above it.
+ *
+ * The pillars keep a wider container: they are a two-up grid of short lines,
+ * not prose, and 65ch would squeeze them into one column on a laptop.
  */
-function StoryWithHero({ src }: { src: string }) {
-  return (
-    <section className="bg-gradient-to-b from-blush-wash to-white">
-      <div className="shell pb-12 pt-14 lg:pt-20">
-        <div className="mx-auto max-w-3xl">
-          <StoryHeading />
-        </div>
-
-        <figure className="mt-10">
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[1.75rem] shadow-lift sm:aspect-[16/9] lg:aspect-[21/9]">
-            <Image
-              src={src}
-              alt={STORY_IMAGE_ALT}
-              fill
-              priority
-              sizes="(max-width: 1200px) 100vw, 1200px"
-              className="object-cover object-[40%_32%]"
-            />
-          </div>
-          <figcaption className="note mt-4 text-center text-xl leading-tight">
-            Real challenges. Brighter tomorrow. <span aria-hidden="true">&hearts;</span>
-          </figcaption>
-        </figure>
-
-        <div className="mx-auto mt-10 max-w-3xl">
-          <StoryProse />
-        </div>
-
-        <Pillars className="mx-auto mt-12 grid max-w-3xl gap-5 sm:grid-cols-2" />
-      </div>
-    </section>
-  );
-}
-
 export default function AboutPage() {
-  // Owner decision: the artwork replaces the portrait. Until the asset is in
-  // public/brand/, the original layout stays live rather than pointing at a
-  // file that is not there.
-  if (STORY_IMAGE_SRC) {
-    return (
-      <>
-        <StoryWithHero src={STORY_IMAGE_SRC} />
-        <FinalCta
-          heading="Have a goal ready? Let's make it happen."
-          support={`Join ${BRAND} and turn your plans into progress.`}
-          withMascot
-        />
-      </>
-    );
-  }
-
   return (
     <>
       <section className="bg-gradient-to-b from-blush-wash to-white">
-        <div className="shell grid gap-10 pb-12 pt-14 lg:grid-cols-2 lg:items-start lg:gap-14 lg:pt-20">
-          <div>
+        <div className="shell pb-12 pt-14 lg:pt-20">
+          <div className="mx-auto max-w-prose">
             <StoryHeading />
+          </div>
 
+          <StoryHero src={STORY_IMAGE_SRC} />
+
+          <div className="mx-auto mt-10 max-w-prose">
             <StoryProse />
           </div>
 
-          <div className="lg:sticky lg:top-28">
-            {FOUNDER_PORTRAIT_SRC ? (
-              <div>
-                <p className="note mb-3 hidden text-right text-xl leading-tight sm:block">
-                  Real challenges.
-                  <br />
-                  Brighter tomorrow. <span aria-hidden="true">&hearts;</span>
-                </p>
-                <Image
-                  src={FOUNDER_PORTRAIT_SRC}
-                  alt={`${FOUNDER.name}, ${FOUNDER.title}`}
-                  width={880}
-                  height={880}
-                  priority
-                  sizes="(max-width: 1024px) 100vw, 520px"
-                  className="w-full rounded-[1.75rem] object-cover shadow-lift"
-                />
-              </div>
-            ) : (
-              /* PRD §30.6 forbids a generated founder portrait. Until the approved
-                 photo is supplied, show a typographic card instead. */
-              <div className="rounded-[1.75rem] bg-gradient-to-br from-blush-light to-cream-light p-10 text-center ring-1 ring-blush">
-                <p className="font-script text-3xl leading-snug text-berry">
-                  Real challenges.
-                  <br />
-                  Brighter tomorrow. <span aria-hidden="true">&hearts;</span>
-                </p>
-                <p className="mt-6 text-lg font-semibold text-ink">{FOUNDER.name}</p>
-                <p className="text-sm text-mauve-light">{FOUNDER.title}</p>
-              </div>
-            )}
-
-            <Pillars className="mt-8 space-y-5" />
-          </div>
+          <Pillars className="mx-auto mt-12 grid max-w-3xl gap-5 sm:grid-cols-2" />
         </div>
       </section>
 

@@ -215,29 +215,39 @@ export const MY_STORY_PARAGRAPHS_AFTER = [
 export const FOUNDER = { name: "Nikita Tejwani", title: `Founder, ${BRAND}` } as const;
 
 /**
- * PRD §30.6 requires a real, user-approved founder image and forbids a generated
- * one. This photograph was supplied and approved by the founder herself.
- * Override with NEXT_PUBLIC_FOUNDER_PORTRAIT to swap it without a code change.
+ * The square founder photograph. RETIRED from the page, kept in the repo.
+ *
+ * The owner retired it in favour of the wide story artwork below (decision,
+ * 2026-09-08). Nothing renders it now, and this constant survives on purpose:
+ * the file stays at public/brand/founder.webp and this is the pointer to it,
+ * so putting it back is a render decision rather than an archaeology exercise.
+ * tests/public-site.test.tsx asserts both halves — the file is still there,
+ * and /about no longer references it.
  */
 export const FOUNDER_PORTRAIT_SRC =
   process.env.NEXT_PUBLIC_FOUNDER_PORTRAIT ?? "/brand/founder.webp";
 
 /**
- * The My Story hero — the wide founder-and-Vezri artwork (owner decision,
- * 2026-09-08: it replaces the portrait rather than joining it).
+ * The My Story hero — the wide founder-and-Vezri artwork.
  *
- * Null until the asset is actually in public/brand/. The page renders the
- * original portrait layout while this is null, so production never points at a
- * file that does not exist. Activating it is one line: give this a default of
- * "/brand/story.webp", or set NEXT_PUBLIC_STORY_IMAGE.
+ * 1448×1086, 4:3 landscape, and that shape is the whole reason /about is laid
+ * out the way it is: it replaces a square portrait that sat in a sidebar, and
+ * a landscape image with two subjects in a portrait slot is either letterboxed
+ * into a stripe or cropped through somebody's face.
  *
- * Note for whoever lands the asset: PRD §30.6 says not to use a *generated*
- * founder portrait, and the square founder.webp it replaces is recorded as the
- * real approved photograph. Retiring that in favour of illustrated artwork is
- * the owner's call, made explicitly — this comment is the record of it, not an
- * objection.
+ * PRD §30.6 forbids a *generated* founder portrait, and the founder.webp this
+ * replaces is recorded as the real approved photograph. Retiring it for
+ * illustrated artwork is the owner's call, made explicitly — this comment is
+ * the record of that, not an objection.
  */
-export const STORY_IMAGE_SRC = process.env.NEXT_PUBLIC_STORY_IMAGE ?? null;
+export const STORY_IMAGE_SRC = process.env.NEXT_PUBLIC_STORY_IMAGE ?? "/brand/story.webp";
 
-/** Alt text for the hero. Describes what is in it, per §30.11. */
-export const STORY_IMAGE_ALT = `${FOUNDER.name} with ${MASCOT}, the ${BRAND} falcon archer, drawing a bow toward a target`;
+/**
+ * Alt text for the hero (§30.11). Describes what is actually in the picture.
+ *
+ * "falcon archer" was wrong once the artwork arrived: Vezri is not the one
+ * with the bow. Nikita draws it, aiming right, and Vezri is at her shoulder on
+ * the left — which is also why the layout anchors every crop to the left.
+ * Never alt="": this is content, not decoration.
+ */
+export const STORY_IMAGE_ALT = `${FOUNDER.name} drawing a bow toward a target in a sunlit rose garden, with ${MASCOT}, the ${BRAND} falcon, at her shoulder`;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { existsSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactElement } from "react";
 
@@ -25,6 +26,7 @@ import {
   MY_STORY_PULLQUOTE,
   PERSONALIZATION,
   ROUTES,
+  STORY_IMAGE_ALT,
   STORY_TEASER,
   THINKS_AHEAD,
   THINKS_AHEAD_HEADING,
@@ -348,9 +350,45 @@ describe("My Story page (PRD §30.6, §30.13)", () => {
     expect(about).toContain(`href="${ROUTES.signUp}"`);
   });
 
-  it("renders the approved founder portrait with a descriptive alt text", () => {
-    expect(about).toContain("/brand/founder.webp");
-    expect(about).toMatch(/alt="Nikita Tejwani, Founder, Vezriqen AI\u2122"/);
+  /**
+   * The owner retired the square portrait in favour of the wide artwork
+   * (2026-09-08). Both halves of that decision are asserted: the page stops
+   * rendering the photograph, and the photograph stays in the repo so putting
+   * it back is a render decision rather than an archaeology exercise.
+   */
+  it("renders the story artwork and no longer the retired portrait", () => {
+    expect(about).toContain("/brand/story.webp");
+    expect(about).not.toContain("/brand/founder.webp");
+    expect(existsSync("public/brand/founder.webp")).toBe(true);
+  });
+
+  it("describes what is in the artwork, and never with an empty alt", () => {
+    // §30.11. It is content, not decoration, and the description has to match
+    // the picture: Nikita holds the bow, Vezri is beside her.
+    expect(about).toContain(`alt="${STORY_IMAGE_ALT}"`);
+    expect(STORY_IMAGE_ALT).toContain("Nikita Tejwani");
+    expect(STORY_IMAGE_ALT).toContain("Vezri");
+    expect(STORY_IMAGE_ALT).toContain("target");
+    expect(about).not.toMatch(/<img[^>]*alt=""[^>]*brand\/story/);
+  });
+
+  /**
+   * The crop rules, asserted because they are invisible in review and a
+   * default centre crop cuts this particular picture in half — Nikita is on
+   * the left, the target on the right.
+   */
+  it("anchors the hero crop to the left and never to the centre", () => {
+    expect(about).toContain("object-left");
+    expect(about).not.toMatch(/object-cover[^"]*object-center/);
+  });
+
+  it("shows the whole picture at phone width rather than cropping it", () => {
+    // 4:3 is the artwork's own ratio, so object-cover removes nothing.
+    expect(about).toMatch(/aspect-\[4\/3\]/);
+  });
+
+  it("does not make a phone download the 1448px original", () => {
+    expect(about).toContain('sizes="(max-width: 1200px) 100vw, 1200px"');
   });
 });
 
