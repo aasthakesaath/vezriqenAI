@@ -6,6 +6,7 @@ export const APP_ROUTES = {
   start: "/start",
   today: "/today",
   goals: "/goals",
+  reminders: "/reminders",
   settings: "/settings",
 } as const;
 

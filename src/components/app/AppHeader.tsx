@@ -32,6 +32,12 @@ export default function AppHeader({ name }: { name?: string | null }) {
             Today
           </Link>
           <Link
+            href={APP_ROUTES.reminders}
+            className="text-[0.95rem] font-medium text-mauve transition-colors hover:text-berry"
+          >
+            Reminders
+          </Link>
+          <Link
             href={APP_ROUTES.settings}
             className="text-[0.95rem] font-medium text-mauve transition-colors hover:text-berry"
           >

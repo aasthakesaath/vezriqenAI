@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import TaskActions from "./TaskActions";
+import ExecutionBlockCoach from "@/components/coach/ExecutionBlockCoach";
 import { APP_ROUTES } from "@/lib/routes";
 
 export type TodayCardView = {
@@ -60,15 +61,11 @@ export default function TodayList({ cards }: { cards: TodayCardView[] }) {
           </div>
 
           {coachFor === card.id ? (
-            // The Execution Block Coach (§13) replaces this in Milestone 5.
-            // Until then the check-in is recorded and nothing is silently
-            // rescheduled, which is the rule that matters.
-            <p
-              role="status"
-              className="mt-4 rounded-xl bg-blush-wash px-4 py-3 text-sm leading-relaxed text-ink"
-            >
-              Noted, and nothing has been moved. Vezri will help you work out what got in the way.
-            </p>
+            <ExecutionBlockCoach
+              taskId={card.id}
+              taskTitle={card.title}
+              onDone={() => setCoachFor(null)}
+            />
           ) : (
             <TaskActions
               taskId={card.id}
