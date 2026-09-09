@@ -127,7 +127,7 @@ export default function ReminderPreferences({
       aria-labelledby="reminders-heading"
       className="rounded-2xl border border-blush bg-white p-6 shadow-soft"
     >
-      <h2 id="reminders-heading" className="text-lg font-semibold text-ink">
+      <h2 id="reminders-heading" className="scroll-mt-24 text-lg font-semibold text-ink">
         Reminders
       </h2>
 

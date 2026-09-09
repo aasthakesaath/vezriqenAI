@@ -11,6 +11,7 @@ import { VezriPoseImage } from "@/components/VezriWorking";
 import { POSE_FOR } from "@/lib/vezri-poses";
 import { APP_ROUTES } from "@/lib/routes";
 import DeleteAccount from "@/components/app/DeleteAccount";
+import SettingsNav from "@/components/app/SettingsNav";
 
 export const metadata: Metadata = { title: "Settings", robots: { index: false } };
 
@@ -62,7 +63,12 @@ export default async function SettingsPage({
         />
       </div>
 
-      <div className="mt-8 space-y-6">
+      {/* Jump links, not a second place settings live. The page has four
+          sections now and the last of them is at the foot; a nav is cheaper
+          than scrolling past everything to find it. */}
+      <SettingsNav />
+
+      <div className="mt-6 space-y-6">
         <TimeZoneSetting timeZone={settings.timeZone} />
 
         <ReminderPreferences

@@ -41,7 +41,7 @@ export default function CalendarConnection({
       aria-labelledby="calendar-heading"
       className="rounded-2xl border border-blush bg-white p-6 shadow-soft"
     >
-      <h2 id="calendar-heading" className="text-lg font-semibold text-ink">
+      <h2 id="calendar-heading" className="scroll-mt-24 text-lg font-semibold text-ink">
         Google Calendar
       </h2>
       <p className="mt-2 text-[0.98rem] leading-relaxed text-mauve">

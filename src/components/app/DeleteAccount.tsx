@@ -68,7 +68,7 @@ export default function DeleteAccount() {
       aria-labelledby="delete-account-heading"
       className="mt-12 rounded-2xl border border-berry/30 bg-white p-5 shadow-soft sm:p-6"
     >
-      <h2 id="delete-account-heading" className="text-lg font-semibold text-ink">
+      <h2 id="delete-account-heading" className="scroll-mt-24 text-lg font-semibold text-ink">
         Delete account
       </h2>
 

@@ -46,7 +46,7 @@ export default function TimeZoneSetting({ timeZone }: { timeZone: string }) {
       aria-labelledby="timezone-heading"
       className="rounded-2xl border border-blush bg-white p-6 shadow-soft"
     >
-      <h2 id="timezone-heading" className="text-lg font-semibold text-ink">
+      <h2 id="timezone-heading" className="scroll-mt-24 text-lg font-semibold text-ink">
         Your time zone
       </h2>
       <p className="mt-1 text-sm text-mauve">
