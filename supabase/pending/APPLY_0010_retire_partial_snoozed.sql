@@ -1,7 +1,9 @@
 -- =========================================================================
--- PENDING DATA MIGRATION — retire `partial` and `snoozed` task statuses.
+-- DATA MIGRATION — retire `partial` and `snoozed` task statuses.
 --
--- NOT RUN. Read the counts first (step 1), then decide.
+-- APPLIED 2026-09-09. Kept here, like 0005-0009, as the record of what was
+-- run. Steps 1 and 3 are safe to re-run at any time; step 2 is idempotent and
+-- now affects nothing.
 --
 -- Why: "Partly" and "Snooze" were removed from the product on 2026-09-09
 -- (owner decision). Both wrote a status nothing read correctly:
@@ -27,7 +29,7 @@
 -- =========================================================================
 
 -- ---------------------------------------------------------------------------
--- STEP 1 — look before you leap. Run this on its own first.
+-- STEP 1 — the counts, read before anything was changed.
 -- ---------------------------------------------------------------------------
 select
   status,
@@ -70,10 +72,17 @@ from public.tasks
 where status in ('partial', 'snoozed');
 
 -- ---------------------------------------------------------------------------
--- AFTERWARDS — one line of code to remove.
+-- AFTERWARDS — done.
 --
--- `partial` is still in OPEN_TASK_STATUSES (src/lib/plan/task-status.ts) so
--- that tasks sitting in it stay VISIBLE until this has run. Once step 3
--- returns zero, delete that entry; tests/retired-task-statuses.test.ts will
--- need its matching assertion updated in the same commit.
+-- `partial` was in OPEN_TASK_STATUSES (src/lib/plan/task-status.ts) only so
+-- that tasks sitting in it stayed VISIBLE until this ran. It was removed once
+-- this was applied, along with its assertion in
+-- tests/retired-task-statuses.test.ts, which now checks the opposite: neither
+-- retired status is readable, and both destinations are.
+--
+-- If step 3 ever returns a non-zero count again, something is writing a
+-- retired status. tests/retired-task-statuses.test.ts is meant to catch that
+-- before it ships; the one known writer outside the app is the email
+-- reminder's Snooze link (src/lib/reminders/redeem.ts), which has not been
+-- changed because it means changing what an email button does.
 -- ---------------------------------------------------------------------------

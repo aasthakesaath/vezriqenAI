@@ -86,10 +86,22 @@ describe("nothing writes a retired status", () => {
 });
 
 describe("the open set", () => {
-  it("still reads `partial` until the migration has run", () => {
-    // Dropping it from the read path before the data moves would HIDE those
-    // tasks rather than migrate them — they are live user work.
-    expect(isOpenTaskStatus("partial")).toBe(true);
+  it("no longer reads either retired status", () => {
+    // `partial` was readable while live rows still held it — dropping it from
+    // the read path before the data moved would have HIDDEN those tasks
+    // rather than migrated them. APPLY_0010 moved them on 2026-09-09, so
+    // reading it now would only be a way for it to come back unnoticed.
+    for (const status of Object.keys(RETIRED_TASK_STATUSES)) {
+      expect(isOpenTaskStatus(status), `${status} is retired`).toBe(false);
+    }
+  });
+
+  it("keeps every migration destination inside the open set", () => {
+    // The rows APPLY_0010 moved have to land somewhere the lists still show,
+    // or the migration would have hidden them just as surely.
+    for (const destination of Object.values(RETIRED_TASK_STATUSES)) {
+      expect(isOpenTaskStatus(destination), `${destination} must stay open`).toBe(true);
+    }
   });
 
   it("counts the three statuses the product writes", () => {
@@ -116,6 +128,6 @@ describe("the open set", () => {
         "OPEN_TASK_STATUSES",
       );
     }
-    expect(OPEN_TASK_STATUSES.length).toBe(4);
+    expect(OPEN_TASK_STATUSES.length).toBe(3);
   });
 });

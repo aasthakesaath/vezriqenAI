@@ -13,17 +13,15 @@
  * narrower say so where they are.
  */
 
-/** Work that still wants doing, for the lists that show a user their day. */
-export const OPEN_TASK_STATUSES = [
-  "not_started",
-  "in_progress",
-  "unconfirmed",
-  // RETIRED, still readable. Nothing writes `partial` any more (see below),
-  // but rows written before it was retired are live user data: dropping it
-  // from this set would hide those tasks rather than migrate them. Remove it
-  // once the migration in supabase/pending/ has run.
-  "partial",
-] as const;
+/**
+ * Work that still wants doing, for the lists that show a user their day.
+ *
+ * `partial` was in here until 2026-09-09, purely so that tasks sitting in a
+ * retired status stayed VISIBLE while they waited to be migrated. The
+ * migration has run (APPLY_0010), no task holds either retired status, and
+ * reading them would now only be a way for one to come back unnoticed.
+ */
+export const OPEN_TASK_STATUSES = ["not_started", "in_progress", "unconfirmed"] as const;
 
 /**
  * Statuses the product no longer writes, and where each one should land.
@@ -42,6 +40,10 @@ export const OPEN_TASK_STATUSES = [
  * Both remain in the `task_status` enum and both remain in `check_ins.state`
  * history, which is a record of what the user actually reported and is not
  * rewritten. This is only about the live status on the task itself.
+ *
+ * Applied 2026-09-09 by supabase/pending/APPLY_0010_retire_partial_snoozed.sql.
+ * The map is kept afterwards rather than deleted: it is what the guard test
+ * checks against, and it is the record of where the rows went.
  */
 export const RETIRED_TASK_STATUSES = {
   partial: "in_progress",
