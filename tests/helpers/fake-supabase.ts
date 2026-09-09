@@ -56,6 +56,11 @@ class Query implements PromiseLike<Result> {
     this.filters.push([column, value]);
     return this;
   }
+  /** `.is("used_at", null)` — the only form the code under test uses. */
+  is(column: string, value: null) {
+    this.filters.push([column, value]);
+    return this;
+  }
   order(column: string, options?: { ascending?: boolean }) {
     this.orderKey = column;
     this.ascending = options?.ascending ?? true;

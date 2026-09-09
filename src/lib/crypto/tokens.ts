@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual, createHmac } from "node:crypto";
+import type { EmailAction, RetiredEmailAction } from "@/lib/reminders/email-actions";
 
 /**
  * Encryption for stored OAuth tokens (PRD §23 "Encrypt tokens/secrets at rest").
@@ -86,7 +87,14 @@ export function decryptToken(
 export type EmailActionPayload = {
   taskId: string;
   reminderId: string | null;
-  action: "done" | "snooze" | "stuck";
+  /**
+   * Retired actions are still PARSED, deliberately. A link sitting in an inbox
+   * from before "Snooze a day" was cut is a genuine, correctly signed token,
+   * and the honest answer to it is "that button is gone" rather than "that
+   * link isn't valid" — which would send someone looking for a problem that
+   * is not theirs. What refuses it is the action check, not the signature.
+   */
+  action: EmailAction | RetiredEmailAction;
   expiresAt: number;
 };
 

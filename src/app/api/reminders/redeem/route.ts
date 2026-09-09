@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redeemEmailAction } from "@/lib/reminders/redeem";
+import { RETIRED_EMAIL_ACTION_MESSAGE } from "@/lib/reminders/email-actions";
 import { SUPABASE_SERVICE_ROLE_KEY } from "@/lib/env";
 
 export const runtime = "nodejs";
@@ -13,6 +14,20 @@ const MESSAGES = {
   expired: "That link has expired. You can still check in from the app.",
   already_used: "You've already answered this one.",
   not_found: "That link is no longer active.",
+  retired_action: RETIRED_EMAIL_ACTION_MESSAGE,
+} as const;
+
+/**
+ * 410 for an action that no longer exists, not 400 and certainly not 500.
+ * The request was well-formed and the token was genuine — the thing it asked
+ * for is gone, which is exactly what Gone means.
+ */
+const STATUS = {
+  invalid: 400,
+  expired: 400,
+  already_used: 409,
+  not_found: 400,
+  retired_action: 410,
 } as const;
 
 /**
@@ -40,7 +55,7 @@ export async function POST(request: Request) {
   if (!outcome.ok) {
     return NextResponse.json(
       { error: MESSAGES[outcome.reason] },
-      { status: outcome.reason === "already_used" ? 409 : 400 },
+      { status: STATUS[outcome.reason] },
     );
   }
 

@@ -1,12 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-const CONFIRMED = {
-  done: "Recorded — nice one.",
-  snooze: "Snoozed for a day.",
-  stuck: "Noted. Nothing has been moved — open Vezriqen and Vezri will help you get unstuck.",
-} as const;
+import { EMAIL_ACTION_CONFIRMED, type EmailAction } from "@/lib/reminders/email-actions";
 
 /**
  * The POST half of the email action flow. The confirmation click is what makes
@@ -17,7 +12,8 @@ export default function RedeemConfirm({
   action,
 }: {
   token: string;
-  action: "done" | "snooze" | "stuck";
+  /** Never a retired one: the page refuses those before rendering this. */
+  action: EmailAction;
 }) {
   const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -42,7 +38,7 @@ export default function RedeemConfirm({
     return (
       <div className="mt-8">
         <p role="status" className="rounded-xl bg-blush-wash px-5 py-4 text-ink">
-          {CONFIRMED[action]}
+          {EMAIL_ACTION_CONFIRMED[action]}
         </p>
         <a href="/today" className="btn-secondary mt-5">
           Open Vezriqen AI&trade;

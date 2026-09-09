@@ -1,13 +1,20 @@
 import { createEmailActionToken } from "@/lib/crypto/tokens";
+import { EMAIL_ACTION_LABEL, type EmailAction } from "@/lib/reminders/email-actions";
 import { formatLongDayKey } from "@/lib/time";
 import { toDayKey } from "@/lib/time-zone";
 
 /**
  * Reminder emails (PRD §12).
  *
- * Action emails carry secure deep links for Done, Snooze and I'm stuck. The
- * links are HMAC-signed and short-lived (§23), and each is single-use, so a
- * forwarded email cannot act twice.
+ * Action emails carry secure deep links for the same three responses a task
+ * row offers: Done, Not done and I'm stuck. The links are HMAC-signed and
+ * short-lived (§23), and each is single-use, so a forwarded email cannot act
+ * twice.
+ *
+ * "Snooze a day" was here until 2026-09-10. It wrote `snoozed` onto the task,
+ * a status outside every open set, so tapping it in an inbox made the task
+ * disappear from the app entirely and nothing ever brought it back. An email
+ * must not be able to do something the product itself cannot.
  *
  * Tone follows §20 and §4.6: calm, specific, no guilt. Missing work is
  * information, not a failing.
@@ -39,7 +46,7 @@ function formatDate(date: Date | null): string | null {
 
 function actionLink(
   input: ReminderEmailInput,
-  action: "done" | "snooze" | "stuck",
+  action: EmailAction,
 ): { url: string; token: string; expiresAt: Date } {
   const { token, expiresAt } = createEmailActionToken({
     taskId: input.taskId,
@@ -82,13 +89,13 @@ export function buildReminderEmail(input: ReminderEmailInput) {
         actions: [{ label: "Open Today", url: `${input.siteUrl}/today`, primary: true }],
         footer: "Nothing to reply to — this is just a heads-up.",
       }),
-      tokens: [] as Array<{ action: "done" | "snooze" | "stuck"; token: string; expiresAt: Date }>,
+      tokens: [] as Array<{ action: EmailAction; token: string; expiresAt: Date }>,
     };
   }
 
   // Action checkpoint: the user closes the loop (§12 B).
   const done = actionLink(input, "done");
-  const snooze = actionLink(input, "snooze");
+  const notDone = actionLink(input, "not_done");
   const stuck = actionLink(input, "stuck");
 
   const text = [
@@ -97,9 +104,9 @@ export function buildReminderEmail(input: ReminderEmailInput) {
     `How did this go? ${input.taskTitle}`,
     input.rationale ? `(${input.rationale})` : null,
     "",
-    `Done: ${done.url}`,
-    `Snooze a day: ${snooze.url}`,
-    `I'm stuck: ${stuck.url}`,
+    `${EMAIL_ACTION_LABEL.done}: ${done.url}`,
+    `${EMAIL_ACTION_LABEL.not_done}: ${notDone.url}`,
+    `${EMAIL_ACTION_LABEL.stuck}: ${stuck.url}`,
     "",
     `Or open Vezriqen: ${input.siteUrl}/today`,
     "",
@@ -119,16 +126,16 @@ export function buildReminderEmail(input: ReminderEmailInput) {
       body: [input.rationale ?? "", "How did it go?"].filter(Boolean),
       goalTitle: input.goalTitle,
       actions: [
-        { label: "Done", url: done.url, primary: true },
-        { label: "Snooze a day", url: snooze.url, primary: false },
-        { label: "I'm stuck", url: stuck.url, primary: false },
+        { label: EMAIL_ACTION_LABEL.done, url: done.url, primary: true },
+        { label: EMAIL_ACTION_LABEL.not_done, url: notDone.url, primary: false },
+        { label: EMAIL_ACTION_LABEL.stuck, url: stuck.url, primary: false },
       ],
       footer:
         "If it didn't happen, that's useful too — Vezri will help you find the smallest way forward.",
     }),
     tokens: [
       { action: "done" as const, token: done.token, expiresAt: done.expiresAt },
-      { action: "snooze" as const, token: snooze.token, expiresAt: snooze.expiresAt },
+      { action: "not_done" as const, token: notDone.token, expiresAt: notDone.expiresAt },
       { action: "stuck" as const, token: stuck.token, expiresAt: stuck.expiresAt },
     ],
   };

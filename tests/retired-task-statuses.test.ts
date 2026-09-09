@@ -6,6 +6,11 @@ import {
   RETIRED_TASK_STATUSES,
   isOpenTaskStatus,
 } from "@/lib/plan/task-status";
+import {
+  EMAIL_ACTIONS,
+  RETIRED_EMAIL_ACTIONS,
+  isEmailAction,
+} from "@/lib/reminders/email-actions";
 
 /**
  * `partial` and `snoozed` are retired (owner decision, 2026-09-09).
@@ -29,18 +34,16 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 
 describe("nothing writes a retired status", () => {
   /**
-   * The two places allowed to name them, and why:
+   * The places allowed to name them, and why.
    *
-   *   lib/plan/task-status.ts   defines the retirement and the destinations
-   *   lib/reminders/redeem.ts   the email "Snooze" link, which predates this
-   *                             and still writes `snoozed`. Flagged rather
-   *                             than silently changed: changing what an email
-   *                             button does is a product decision, and the
-   *                             enum behind it is a database type.
+   * lib/reminders/redeem.ts used to be on this list: the email "Snooze a day"
+   * link wrote `snoozed` from an inbox, bypassing the API that refuses it.
+   * That link was cut on 2026-09-10, so the exception is gone with it and
+   * this test now fails if redeem.ts ever names a retired status again.
    */
   const ALLOWED = [
+    // Defines the retirement and each destination.
     join("lib", "plan", "task-status.ts"),
-    join("lib", "reminders", "redeem.ts"),
     // Reads `check_ins.state === "snoozed"` to count past snoozes. History is
     // a record of what people actually reported and is never rewritten, so
     // reading it stays correct after the button is gone.
@@ -129,5 +132,41 @@ describe("the open set", () => {
       );
     }
     expect(OPEN_TASK_STATUSES.length).toBe(3);
+  });
+});
+
+/**
+ * The email actions retired alongside them.
+ *
+ * A link in an inbox outlives a deploy, so `snooze` stays a legal value of the
+ * `email_action` enum — the redeem path has to read one in order to refuse it.
+ * Nothing may WRITE it, which is a different thing and is what this checks.
+ */
+describe("retired email actions", () => {
+  it("offers exactly the three responses a task row offers", () => {
+    expect([...EMAIL_ACTIONS]).toEqual(["done", "not_done", "stuck"]);
+  });
+
+  it("does not treat a retired action as current", () => {
+    for (const action of RETIRED_EMAIL_ACTIONS) {
+      expect(isEmailAction(action), `${action} is retired`).toBe(false);
+    }
+  });
+
+  it("mints no link for a retired action", () => {
+    // The email builder is the only thing that creates these rows.
+    const template = readFileSync("src/lib/email/templates.ts", "utf8");
+    for (const action of RETIRED_EMAIL_ACTIONS) {
+      expect(template, `the email still mints a ${action} link`).not.toContain(`"${action}"`);
+    }
+    expect(template).toContain('"not_done"');
+  });
+
+  it("refuses a retired action before it writes anything", () => {
+    // The order of these two matters more than either on its own: the check
+    // has to come BEFORE the first write, or an old link still half-acts.
+    const source = readFileSync("src/lib/reminders/redeem.ts", "utf8");
+    expect(source.indexOf("isEmailAction")).toBeLessThan(source.indexOf('from("check_ins")'));
+    expect(source.indexOf("isEmailAction")).toBeLessThan(source.indexOf('from("tasks")'));
   });
 });

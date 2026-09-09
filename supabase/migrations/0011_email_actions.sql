@@ -1,0 +1,25 @@
+-- =============================================================================
+-- 0011 — email actions match the app's three responses.
+--
+-- (0010 is deliberately absent from this directory: the retirement of the
+-- `partial` and `snoozed` TASK statuses was data-only and is recorded in
+-- supabase/pending/APPLY_0010_retire_partial_snoozed.sql.)
+--
+-- A reminder email offered Done, Snooze a day, and I'm stuck. "Snooze a day"
+-- wrote `snoozed` onto the task — a status outside every open set — so tapping
+-- it from an inbox removed the task from every list in the product and nothing
+-- ever brought it back. It was cut from the app on 2026-09-09 and from email
+-- on 2026-09-10; `not_done` replaces it, so the email offers exactly what a
+-- task row offers.
+--
+-- `snooze` STAYS in the enum. Rows in email_action_tokens written before this
+-- still carry it, and the redeem path has to be able to read one in order to
+-- refuse it politely — dropping the value would turn those rows into a read
+-- error, which is a 500 where a sentence belongs. Nothing writes it any more;
+-- tests/retired-task-statuses.test.ts fails the build if anything starts.
+-- =============================================================================
+
+-- Not wrapped in a transaction. ALTER TYPE ... ADD VALUE may not be used in the
+-- same transaction that adds it, and older Postgres refuses it inside one
+-- outright; a single statement sidesteps both. It is idempotent as written.
+alter type public.email_action add value if not exists 'not_done';

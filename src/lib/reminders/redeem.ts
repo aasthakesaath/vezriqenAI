@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hashToken, verifyEmailActionToken } from "@/lib/crypto/tokens";
+import { isEmailAction, type EmailAction } from "./email-actions";
 
 /**
  * Redeeming an email action link (PRD §12, §23).
@@ -13,8 +14,11 @@ import { hashToken, verifyEmailActionToken } from "@/lib/crypto/tokens";
  */
 
 export type RedeemOutcome =
-  | { ok: true; taskId: string; action: "done" | "snooze" | "stuck"; needsCoach: boolean }
-  | { ok: false; reason: "invalid" | "expired" | "already_used" | "not_found" };
+  | { ok: true; taskId: string; action: EmailAction; needsCoach: boolean }
+  | {
+      ok: false;
+      reason: "invalid" | "expired" | "already_used" | "not_found" | "retired_action";
+    };
 
 export async function redeemEmailAction(options: {
   admin: SupabaseClient;
@@ -39,23 +43,34 @@ export async function redeemEmailAction(options: {
   if (row.used_at) return { ok: false, reason: "already_used" };
   if (new Date(row.expires_at).getTime() < now.getTime()) return { ok: false, reason: "expired" };
 
-  const state =
-    row.action === "done" ? "done" : row.action === "snooze" ? "snoozed" : "stuck";
+  // An action this product no longer offers — a link from an email sent before
+  // it was cut. Checked BEFORE anything is written, and it writes nothing at
+  // all: not the check-in, not the task, not even a used_at stamp on the
+  // token. There is nothing truthful to record, and stamping the token would
+  // turn the second tap into "you've already answered this one", which is not
+  // what happened.
+  if (!isEmailAction(row.action)) {
+    return { ok: false, reason: "retired_action" };
+  }
+  const action: EmailAction = row.action;
+
+  const state = action === "done" ? "done" : action === "not_done" ? "not_done" : "stuck";
 
   await options.admin.from("check_ins").insert({
     user_id: row.user_id,
     task_id: row.task_id,
     reminder_id: row.reminder_id,
     state,
-    snooze_until:
-      row.action === "snooze" ? new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString() : null,
   });
 
   await options.admin
     .from("tasks")
     .update({
-      status: row.action === "done" ? "done" : row.action === "snooze" ? "snoozed" : "blocked",
-      completed_at: row.action === "done" ? now.toISOString() : null,
+      // The same mapping the in-app check-in uses: "I'm stuck" is `blocked`,
+      // and "Not done" stays `not_done` rather than being tidied into
+      // something that reads as progress.
+      status: action === "done" ? "done" : action === "not_done" ? "not_done" : "blocked",
+      completed_at: action === "done" ? now.toISOString() : null,
     })
     .eq("id", row.task_id);
 
@@ -77,8 +92,9 @@ export async function redeemEmailAction(options: {
   return {
     ok: true,
     taskId: row.task_id,
-    action: row.action as "done" | "snooze" | "stuck",
-    // §13 — "I'm stuck" opens the coach rather than rescheduling.
-    needsCoach: row.action === "stuck",
+    action,
+    // §13 — both of these open the coach rather than rescheduling, exactly as
+    // they do in the app.
+    needsCoach: action === "stuck" || action === "not_done",
   };
 }
