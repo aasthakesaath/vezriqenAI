@@ -34,8 +34,20 @@ const PAGE = 5;
  * asked for; the details a completed task actually has (why it mattered, which
  * milestone, where it came from) fit in the row.
  */
-export default function CompletedTaskList({ tasks }: { tasks: CompletedTaskView[] }) {
-  const [open, setOpen] = useState(false);
+export default function CompletedTaskList({
+  tasks,
+  open,
+  onOpenChange,
+}: {
+  tasks: CompletedTaskView[];
+  /**
+   * Open state, owned by the pane so that finishing a task can open this
+   * section — a task that vanishes into a collapsed heading reads as a task
+   * that was lost, not one that was filed.
+   */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [shown, setShown] = useState(PAGE);
   const panelId = useId();
 
@@ -49,7 +61,7 @@ export default function CompletedTaskList({ tasks }: { tasks: CompletedTaskView[
       <h2 id="completed-heading" className="m-0">
         <button
           type="button"
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => onOpenChange(!open)}
           aria-expanded={open}
           aria-controls={panelId}
           className="flex w-full items-center justify-between gap-3 text-left"
@@ -99,18 +111,24 @@ function CompletedRow({ task }: { task: CompletedTaskView }) {
 
   return (
     <li className="rounded-2xl border border-blush bg-white px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <Icon name="check" className="h-5 w-5 text-mauve" />
-        <span className="min-w-0 flex-1 text-[0.98rem] font-medium text-mauve">{task.title}</span>
-        {task.completedOn && (
-          <span className="text-sm text-mauve-light">Completed {task.completedOn}</span>
-        )}
+      {/* The date sits UNDER the title, not beside it. Beside it, a title long
+          enough to wrap at 375px ran down the left of the row while the date
+          stayed vertically centred against it, and the two read as one
+          collided line. */}
+      <div className="flex items-start gap-3">
+        <Icon name="check" className="mt-0.5 h-5 w-5 text-mauve" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[0.98rem] font-medium text-mauve">{task.title}</p>
+          {task.completedOn && (
+            <p className="mt-0.5 text-sm text-mauve-light">Completed {task.completedOn}</p>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
           aria-controls={detailId}
-          className="rounded-pill border border-blush bg-white px-4 py-1.5 text-sm font-semibold text-mauve transition-colors hover:bg-blush-wash"
+          className="shrink-0 rounded-pill border border-blush bg-white px-4 py-1.5 text-sm font-semibold text-mauve transition-colors hover:bg-blush-wash"
         >
           {open ? "Hide" : "View"}
         </button>

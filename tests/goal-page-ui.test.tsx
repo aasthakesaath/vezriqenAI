@@ -172,11 +172,31 @@ describe("Today's Tasks", () => {
     expect(notDone).toHaveLength(3);
   });
 
-  it("offers the whole check-in set §12 requires", () => {
+  it("offers the three responses a row can record", () => {
     const text = textOf(markup);
-    for (const action of ["Done", "Partly", "Snooze", "Not done", "I'm stuck"]) {
+    for (const action of ["Done", "Not done", "I'm stuck"]) {
       expect(text, `missing "${action}"`).toContain(action);
     }
+  });
+
+  /** Retired 2026-09-09 — see tests/today-goals-screens.test.tsx for why. */
+  it("offers no Partly, no Snooze and no More", () => {
+    const text = textOf(markup);
+    for (const gone of ["Partly", "Snooze", "More", "Fewer options"]) {
+      expect(text, `${gone} is retired`).not.toContain(gone);
+    }
+  });
+
+  it("keeps all three reachable at 375px, none behind a disclosure", () => {
+    // Nine buttons for three rows, and the only aria-expanded on the card is
+    // the list's own "Show N more" — none of the actions is inside a panel
+    // that can be closed.
+    const rows = markup.slice(markup.indexOf("<ul"), markup.lastIndexOf("</ul>"));
+    expect(rows.match(/<button/g)).toHaveLength(9);
+    expect(rows).not.toContain("aria-expanded");
+    // The `hidden` ATTRIBUTE, not the substring: every icon carries
+    // aria-hidden, and matching that would make this assertion meaningless.
+    expect(rows).not.toMatch(/\shidden[=>\s]/);
   });
 
   it("states the badge as a fact, with no menu and no score", () => {
@@ -208,6 +228,8 @@ describe("Today's Tasks", () => {
 describe("completed work stays quiet", () => {
   const markup = renderToStaticMarkup(
     <CompletedTaskList
+      open={false}
+      onOpenChange={() => {}}
       tasks={[
         {
           id: "c1",
@@ -236,7 +258,7 @@ describe("completed work stays quiet", () => {
   });
 
   it("renders nothing at all when there is no history", () => {
-    expect(renderToStaticMarkup(<CompletedTaskList tasks={[]} />)).toBe("");
+    expect(renderToStaticMarkup(<CompletedTaskList tasks={[]} open={false} onOpenChange={() => {}} />)).toBe("");
   });
 });
 

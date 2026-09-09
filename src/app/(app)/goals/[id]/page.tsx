@@ -9,8 +9,9 @@ import Icon from "@/components/icons/Icon";
 import GoalHeader from "@/components/goal/GoalHeader";
 import GoalTabs from "@/components/goal/GoalTabs";
 import GoalLayout from "@/components/goal/GoalLayout";
-import GoalTaskList, { type GoalTaskView } from "@/components/goal/GoalTaskList";
-import CompletedTaskList, { type CompletedTaskView } from "@/components/goal/CompletedTaskList";
+import GoalTodayPane from "@/components/goal/GoalTodayPane";
+import { type GoalTaskView } from "@/components/goal/GoalTaskList";
+import { type CompletedTaskView } from "@/components/goal/CompletedTaskList";
 import NextMilestoneCard from "@/components/goal/NextMilestoneCard";
 import GoalOverview from "@/components/goal/GoalOverview";
 import ScopedPlan from "@/components/goal/ScopedPlan";
@@ -19,6 +20,7 @@ import PastPlanNotice from "@/components/plan/PastPlanNotice";
 import { goalLabel, goalStatement, goalSummary } from "@/lib/goal-label";
 import { DEFAULT_GOAL_TAB, isGoalTab, windowFor, type GoalTab } from "@/lib/plan/goal-tabs";
 import { selectGoalToday, summarizeToday, VISIBLE_TASKS } from "@/lib/plan/goal-today";
+import { OPEN_TASK_STATUSES } from "@/lib/plan/task-status";
 import { describePastPlan, inspectPlanDates } from "@/lib/plan/reshape";
 import { milestoneProgress, planForView } from "@/lib/plan/views";
 import { goalReviewPath } from "@/lib/routes";
@@ -28,8 +30,7 @@ import { loadUserSettings } from "@/lib/user-settings";
 
 export const metadata: Metadata = { title: "Goal", robots: { index: false } };
 
-/** Work that still wants doing. The same set the rest of the planner uses. */
-const OPEN = new Set(["not_started", "in_progress", "unconfirmed", "partial"]);
+const OPEN = new Set<string>(OPEN_TASK_STATUSES);
 
 /**
  * PRD §18 — one goal, in five views.
@@ -314,14 +315,12 @@ export default async function GoalDashboardPage({
         }
       >
         {tab === "today" && (
-          <>
-            <GoalTaskList
-              tasks={todayView}
-              summary={summarizeToday(counts)}
-              visibleCount={VISIBLE_TASKS}
-            />
-            <CompletedTaskList tasks={completed} />
-          </>
+          <GoalTodayPane
+            tasks={todayView}
+            summary={summarizeToday(counts)}
+            visibleCount={VISIBLE_TASKS}
+            completed={completed}
+          />
         )}
 
         {tab === "overview" && (

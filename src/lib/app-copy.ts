@@ -76,12 +76,23 @@ export const BLOCK_CHOICES = [
   { id: "something_else", label: "Something else" },
 ] as const;
 
-/** PRD §12 — the action-checkpoint response set. */
+/**
+ * PRD §12 — what a check-in can record.
+ *
+ * §12 listed six. Two were retired on 2026-09-09 (owner decision) because
+ * neither had a consequence: `partial` wrote a status that sat outside Goal
+ * Health's open sets, so it RAISED the score on an overdue task while
+ * capturing nothing about what was left, and `snoozed` lost the task — it is
+ * outside every open set and nothing has ever read `snooze_until`.
+ * lib/plan/task-status.ts carries the full reasoning and where existing rows
+ * go. History keeps both states; the API accepts neither.
+ *
+ * This list is what the API accepts. The first three are buttons on a task
+ * row; `waiting_on_someone` is recorded by the coach rather than tapped.
+ */
 export const CHECKIN_ACTIONS = [
   { id: "done", label: "Done" },
-  { id: "partial", label: "Partially done" },
   { id: "not_done", label: "Not done" },
-  { id: "snoozed", label: "Snooze" },
   { id: "stuck", label: "I'm stuck" },
   { id: "waiting_on_someone", label: "Waiting on someone" },
 ] as const;
@@ -147,6 +158,27 @@ export const GOAL_ENCOURAGEMENT = "Big goals move in small steps. Today only nee
 export const GOAL_TODAY_HEADING = "Today's Tasks";
 export const GOAL_TODAY_SUBTEXT = "Only what this goal needs from you today.";
 export const GOAL_TODAY_EMPTY = "Nothing on this goal needs you today.";
+
+/**
+ * What the user is told after a check-in lands.
+ *
+ * The only signal used to be the row moving, which says nothing about what was
+ * recorded and nothing at all when the row stays put. Done names where the
+ * task went, because Completed Tasks is a collapsed section and a task that
+ * vanishes into one reads as a task that was lost.
+ */
+export const CHECKIN_CONFIRMATION: Record<"done" | "not_done" | "stuck", string> = {
+  done: "Recorded as done — it is in Completed Tasks below.",
+  not_done: "Recorded. Vezri is working out the smallest way forward.",
+  stuck: "Recorded. Vezri is working out the smallest way forward.",
+};
+
+/** The same, on a screen that has no history section of its own to point at. */
+export const CHECKIN_CONFIRMATION_AWAY: Record<"done" | "not_done" | "stuck", string> = {
+  done: "Recorded as done — it has moved to this goal’s completed work.",
+  not_done: CHECKIN_CONFIRMATION.not_done,
+  stuck: CHECKIN_CONFIRMATION.stuck,
+};
 
 /** The completed history, below the day's work. */
 export const GOAL_COMPLETED_HEADING = "Completed Tasks";

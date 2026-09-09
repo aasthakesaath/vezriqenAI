@@ -1,80 +1,100 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useState } from "react";
 
-export type CheckInState =
-  | "done"
-  | "partial"
-  | "not_done"
-  | "snoozed"
-  | "stuck"
-  | "waiting_on_someone";
+export type CheckInState = "done" | "not_done" | "stuck" | "waiting_on_someone";
+
+/** What each button says while its own request is in flight. */
+const LABELS: Record<"done" | "not_done" | "stuck", { idle: string; busy: string }> = {
+  done: { idle: "Done", busy: "Saving…" },
+  not_done: { idle: "Not done", busy: "Saving…" },
+  stuck: { idle: "I’m stuck", busy: "Saving…" },
+};
 
 /**
  * PRD §12 and §13 — what a person can say happened.
  *
- * The mockup this screen was rebuilt from offers Start / Done / I'm stuck /
- * Edit. Three of those four are a different product:
+ * Three buttons, all of them directly tappable at every width. Two of the five
+ * that used to be here were cut (owner decision, 2026-09-09) because neither
+ * had a consequence:
  *
- *  - dropping "Not done" removes the Execution Block Coach. §13 makes it the
- *    core differentiator, and `not_done` is one of the two states the check-in
- *    API answers `needs_coach` for. A row that cannot say "not done" cannot
- *    reach the coach, so the feature would be gone rather than moved.
- *  - dropping "Partly" removes §12's partial completion, which is a distinct
- *    fact about the work and not a rounding of done or not done.
- *  - "Start" is a fifth state nothing records. It would write nothing, teach
- *    the execution profile nothing, and change nothing on the screen.
+ *  - "Partly" wrote `partial`, which sat outside both of Goal Health's open
+ *    sets. Tapping it on an overdue task removed it from the overdue penalty
+ *    and from required effort, so the score ROSE with no record of what was
+ *    left — §4.10's failure mode — and nothing anywhere captured the remaining
+ *    scope, because no field for it exists.
+ *  - "Snooze" was the behaviour §13 exists to replace, and it lost work:
+ *    `snoozed` is outside every open set and nothing has ever read
+ *    `snooze_until`, so the task left Today and never came back.
  *
- * So: Done, Partly, Not done, I'm stuck at the top level, and Snooze behind a
- * secondary control — it is the one response that reports nothing about the
- * work, so it is the one that can afford a tap. "I'm stuck" is never behind
- * that control at any width, for the same reason "Not done" is not dropped.
+ * "More" went with Snooze; it existed to hold it.
+ *
+ * What stays is the set that reports something true about the work, and both
+ * of the states that reach the Execution Block Coach. Every one of them is a
+ * real button on the row at 375px — §13's differentiator cannot live behind a
+ * disclosure.
  */
 export default function TaskActions({
   taskId,
   reminderId,
   onNeedsCoach,
+  onRecorded,
 }: {
   taskId: string;
   reminderId?: string | null;
   onNeedsCoach: (taskId: string) => void;
+  /**
+   * A check-in landed and the page is about to refresh.
+   *
+   * The confirmation belongs to the LIST, not to this row: a completed task
+   * leaves the list on refresh, and a message that unmounts with the row it
+   * describes is a message nobody reads.
+   */
+  onRecorded?: (state: CheckInState) => void;
 }) {
   const router = useRouter();
-  const id = useId();
   const [busy, setBusy] = useState<CheckInState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [moreOpen, setMoreOpen] = useState(false);
 
   async function checkIn(state: CheckInState) {
     setBusy(state);
     setError(null);
-    const response = await fetch(`/api/tasks/${taskId}/checkin`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        state,
-        reminder_id: reminderId ?? undefined,
-        snooze_until:
-          state === "snoozed"
-            ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-            : undefined,
-      }),
-    });
 
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(payload.error ?? "Couldn't save that.");
+    let response: Response;
+    try {
+      response = await fetch(`/api/tasks/${taskId}/checkin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state, reminder_id: reminderId ?? undefined }),
+      });
+    } catch {
+      // A dropped connection used to reject inside the click handler with
+      // nothing catching it: `busy` stayed set, every button on the row stayed
+      // disabled for good, and no error was ever shown. The row comes back.
+      setError("That didn’t reach Vezri — check your connection and try again.");
       setBusy(null);
       return;
     }
 
-    const payload = (await response.json()) as { needs_coach?: boolean };
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      setError(payload.error ?? "Couldn’t save that.");
+      setBusy(null);
+      return;
+    }
+
+    const payload = (await response.json().catch(() => ({}))) as { needs_coach?: boolean };
     setBusy(null);
+
+    // §13 — "not done" and "I'm stuck" open the coach rather than rescheduling.
+    // The coach appearing in place of these buttons is the confirmation.
     if (payload.needs_coach) {
       onNeedsCoach(taskId);
       return;
     }
+
+    onRecorded?.(state);
     router.refresh();
   }
 
@@ -83,9 +103,8 @@ export default function TaskActions({
 
   return (
     <div>
-      {/* Wraps on narrow screens; never scrolls sideways. All four stay
-          tappable at 375px — the row reflows to two lines rather than hiding
-          the one that opens the coach. */}
+      {/* Wraps on narrow screens; never scrolls sideways, and nothing is
+          hidden behind a control at any width. */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -93,15 +112,7 @@ export default function TaskActions({
           disabled={busy !== null}
           className="rounded-pill bg-berry px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-berry-deep disabled:opacity-60"
         >
-          {busy === "done" ? "Saving…" : "Done"}
-        </button>
-        <button
-          type="button"
-          onClick={() => checkIn("partial")}
-          disabled={busy !== null}
-          className={`${secondary} text-berry`}
-        >
-          Partly
+          {busy === "done" ? LABELS.done.busy : LABELS.done.idle}
         </button>
         <button
           type="button"
@@ -109,7 +120,7 @@ export default function TaskActions({
           disabled={busy !== null}
           className={`${secondary} text-mauve`}
         >
-          Not done
+          {busy === "not_done" ? LABELS.not_done.busy : LABELS.not_done.idle}
         </button>
         <button
           type="button"
@@ -117,30 +128,7 @@ export default function TaskActions({
           disabled={busy !== null}
           className={`${secondary} text-mauve`}
         >
-          I&rsquo;m stuck
-        </button>
-
-        {/* Not a three-dot menu: three dots promise an unknown list. This says
-            how many more there are by opening one visible button. */}
-        <button
-          type="button"
-          aria-expanded={moreOpen}
-          aria-controls={`${id}-more`}
-          onClick={() => setMoreOpen((value) => !value)}
-          className="rounded-pill px-2.5 py-2 text-sm font-medium text-mauve-light underline-offset-2 transition-colors hover:text-berry hover:underline"
-        >
-          {moreOpen ? "Fewer options" : "More"}
-        </button>
-      </div>
-
-      <div id={`${id}-more`} hidden={!moreOpen} className="mt-2 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => checkIn("snoozed")}
-          disabled={busy !== null}
-          className={`${secondary} text-mauve`}
-        >
-          Snooze a day
+          {busy === "stuck" ? LABELS.stuck.busy : LABELS.stuck.idle}
         </button>
       </div>
 

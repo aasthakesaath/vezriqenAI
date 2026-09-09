@@ -2,9 +2,10 @@
 
 import { useId, useState } from "react";
 import Icon, { type IconName } from "@/components/icons/Icon";
-import TaskActions from "@/components/app/TaskActions";
+import TaskActions, { type CheckInState } from "@/components/app/TaskActions";
 import ExecutionBlockCoach from "@/components/coach/ExecutionBlockCoach";
 import {
+  CHECKIN_CONFIRMATION,
   GOAL_TODAY_EMPTY,
   GOAL_TODAY_HEADING,
   GOAL_TODAY_SUBTEXT,
@@ -65,7 +66,13 @@ const URGENCY: Record<UrgencyKind, { icon: IconName; chip: string; badge: string
   },
 };
 
-function TaskRow({ task }: { task: GoalTaskView }) {
+function TaskRow({
+  task,
+  onRecorded,
+}: {
+  task: GoalTaskView;
+  onRecorded: (state: CheckInState) => void;
+}) {
   const [coachOpen, setCoachOpen] = useState(false);
   const tone = URGENCY[task.urgencyKind];
 
@@ -136,6 +143,7 @@ function TaskRow({ task }: { task: GoalTaskView }) {
               taskId={task.id}
               reminderId={task.reminderId}
               onNeedsCoach={() => setCoachOpen(true)}
+              onRecorded={onRecorded}
             />
           )}
         </div>
@@ -157,14 +165,26 @@ export default function GoalTaskList({
   tasks,
   summary,
   visibleCount,
+  onCompleted,
 }: {
   tasks: GoalTaskView[];
   /** "2 overdue · 3 due today", computed on the server. */
   summary: string;
   visibleCount: number;
+  /** Fired when a task is marked done, so the page can open the history. */
+  onCompleted?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [recorded, setRecorded] = useState<CheckInState | null>(null);
   const listId = useId();
+
+  // The confirmation lives here rather than on the row: a completed row leaves
+  // the list on the next render, and a message that unmounts with it is a
+  // message nobody reads.
+  function handleRecorded(state: CheckInState) {
+    setRecorded(state);
+    if (state === "done") onCompleted?.();
+  }
 
   const shown = expanded ? tasks : tasks.slice(0, visibleCount);
   const hidden = tasks.length - shown.length;
@@ -185,13 +205,26 @@ export default function GoalTaskList({
       </p>
       <p className="mt-0.5 text-sm text-mauve">{GOAL_TODAY_SUBTEXT}</p>
 
+      {/* role="status" so it is announced without stealing focus. It stays
+          until the next check-in rather than timing out: a confirmation that
+          disappears on its own is one a slow reader never sees. */}
+      {recorded && recorded !== "waiting_on_someone" && (
+        <p
+          role="status"
+          className="mt-3 flex items-start gap-2 rounded-2xl bg-blush-light px-4 py-3 text-[0.95rem] font-medium text-berry"
+        >
+          <Icon name="check" className="mt-0.5 h-4 w-4" />
+          {CHECKIN_CONFIRMATION[recorded]}
+        </p>
+      )}
+
       {tasks.length === 0 ? (
         <p className="mt-5 rounded-2xl bg-blush-wash px-5 py-4 text-mauve">{GOAL_TODAY_EMPTY}</p>
       ) : (
         <>
           <ul id={listId} className="mt-5 space-y-3">
             {shown.map((task) => (
-              <TaskRow key={task.id} task={task} />
+              <TaskRow key={task.id} task={task} onRecorded={handleRecorded} />
             ))}
           </ul>
 

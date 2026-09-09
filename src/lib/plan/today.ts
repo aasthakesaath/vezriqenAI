@@ -1,4 +1,5 @@
 import { formatDayKey } from "@/lib/time";
+import { OPEN_TASK_STATUSES } from "./task-status";
 import {
   FALLBACK_TIME_ZONE,
   dayKeyIn,
@@ -75,7 +76,7 @@ export function groupByMilestone(cards: TodayCard[]): TodayGroup[] {
   return groups;
 }
 
-const OPEN_STATUSES = new Set(["not_started", "in_progress", "unconfirmed", "partial"]);
+const OPEN_STATUSES = new Set<string>(OPEN_TASK_STATUSES);
 
 /**
  * How much it costs to not do this today.

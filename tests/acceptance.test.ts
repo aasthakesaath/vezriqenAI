@@ -60,15 +60,34 @@ describe("§25.A — seven-day morning routine", () => {
     expect(checkpoint!.responseRequired).toBe(true);
   });
 
-  it("offers the full response set the user needs to report what happened", () => {
+  /**
+   * §12 listed six responses. Two were retired on 2026-09-09 by owner
+   * decision, and this assertion moved with them rather than being deleted:
+   * it is what stops one coming back unnoticed.
+   *
+   * `partial` sat outside both of Goal Health's open sets, so reporting a task
+   * partly done REMOVED it from the overdue penalty and from required effort —
+   * the score rose while nothing captured what was left, which is §4.10's
+   * failure mode. `snoozed` sits outside every open set and nothing has ever
+   * read `snooze_until`, so it lost the task instead of deferring it.
+   *
+   * The states remain in the database enum and in `check_ins` history, which
+   * is a record of what people actually reported. What changed is what the API
+   * accepts and what a row offers.
+   */
+  it("offers the responses that report something true about the work", () => {
     expect(CHECKIN_ACTIONS.map((a) => a.id)).toEqual([
       "done",
-      "partial",
       "not_done",
-      "snoozed",
       "stuck",
       "waiting_on_someone",
     ]);
+  });
+
+  it("keeps both of the responses that reach the Execution Block Coach (§13)", () => {
+    const ids = CHECKIN_ACTIONS.map((a) => a.id);
+    expect(ids).toContain("not_done");
+    expect(ids).toContain("stuck");
   });
 
   /** "A missed morning does not automatically fail the goal." */

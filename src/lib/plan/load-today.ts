@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { backlogSummary, selectTodayCards, selectWaitingOn, type CandidateTask } from "./today";
+import { OPEN_TASK_STATUSES } from "./task-status";
 import { loadUserSettings } from "@/lib/user-settings";
 
 /** Loads every open task across the user's active goals and picks the day's cards. */
@@ -42,7 +43,7 @@ export async function loadToday(options: {
       .from("tasks")
       .select("id, goal_id, milestone_id, title, rationale, task_type, priority, deadline, start_by, estimated_minutes, status")
       .in("goal_id", goalIds)
-      .in("status", ["not_started", "in_progress", "unconfirmed", "partial"]),
+      .in("status", [...OPEN_TASK_STATUSES]),
     supabase
       .from("reminders")
       .select("id, task_id, scheduled_at")

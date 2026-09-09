@@ -1,3 +1,4 @@
+import { OPEN_TASK_STATUSES } from "./task-status";
 import { daysBetween, toDayKey, type DayKey } from "@/lib/time-zone";
 
 /**
@@ -32,7 +33,10 @@ export type GoalTaskCounts = {
   dueThisWeek: number;
 };
 
-const OPEN_STATUSES = new Set(["not_started", "in_progress", "unconfirmed", "partial", "not_done"]);
+// The shared set plus `not_done`: a task the user reported not doing is still
+// outstanding work for a progress count, even though the day's list does not
+// offer it back to them.
+const OPEN_STATUSES = new Set<string>([...OPEN_TASK_STATUSES, "not_done"]);
 
 /** How many days ahead "this week" reaches, counting today as day one. */
 const WEEK = 6;

@@ -108,17 +108,33 @@ describe("§13 — every row can reach the Execution Block Coach", () => {
 describe("§12 — the response set reports what actually happened", () => {
   const markup = html(<TaskActions taskId="t1" onNeedsCoach={() => {}} />);
 
-  it("keeps Done, Partly, Not done and I'm stuck at the top level", () => {
-    for (const label of ["Done", "Partly", "Not done", "I’m stuck"]) {
+  it("offers Done, Not done and I'm stuck, all at the top level", () => {
+    for (const label of ["Done", "Not done", "I’m stuck"]) {
       expect(markup).toContain(label);
     }
+    // Three buttons, and nothing behind a disclosure: at 375px the row wraps
+    // to two lines rather than hiding the one that opens the coach.
+    expect(markup.match(/<button/g)).toHaveLength(3);
+    expect(markup).not.toContain("hidden");
+    expect(markup).not.toContain("aria-expanded");
   });
 
-  it("keeps Snooze, one tap away rather than gone", () => {
-    expect(text(markup)).toContain("Snooze a day");
-    // Behind a control that says it is closed, not hidden with no way back.
-    expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain("More");
+  /**
+   * Retired 2026-09-09 (owner decision), and asserted absent rather than
+   * simply deleted from the test: both wrote a status nothing read correctly,
+   * and a button with no consequence is the kind of thing that comes back.
+   *
+   *  - "Partly" wrote `partial`, which sits outside both of Goal Health's open
+   *    sets — tapping it on an overdue task RAISED the score and recorded
+   *    nothing about what was left.
+   *  - "Snooze" wrote `snoozed`, which is outside every open set, and nothing
+   *    has ever read `snooze_until`: the task left Today and never returned.
+   *  - "More" existed only to hold Snooze.
+   */
+  it("offers no Partly, no Snooze and no More", () => {
+    for (const gone of ["Partly", "Snooze", "More", "Fewer options"]) {
+      expect(text(markup), `${gone} is retired`).not.toContain(gone);
+    }
   });
 
   it("offers no Start, which nothing records", () => {

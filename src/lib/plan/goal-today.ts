@@ -22,6 +22,7 @@
  * what a Tuesday in Chicago looks like without waiting for one.
  */
 
+import { OPEN_TASK_STATUSES } from "./task-status";
 import { taskContextLine } from "./today";
 import { formatDayKey } from "@/lib/time";
 import { daysBetween, toDayKey, type DayKey } from "@/lib/time-zone";
@@ -30,7 +31,7 @@ import { daysBetween, toDayKey, type DayKey } from "@/lib/time-zone";
 export const VISIBLE_TASKS = 3;
 
 /** Statuses that still want doing. Same set the rest of the planner uses. */
-const OPEN = new Set(["not_started", "in_progress", "unconfirmed", "partial"]);
+const OPEN = new Set<string>(OPEN_TASK_STATUSES);
 
 export type GoalTaskInput = {
   id: string;

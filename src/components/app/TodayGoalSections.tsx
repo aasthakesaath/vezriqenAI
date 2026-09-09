@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import TaskActions from "./TaskActions";
+import TaskActions, { type CheckInState } from "./TaskActions";
 import ExecutionBlockCoach from "@/components/coach/ExecutionBlockCoach";
 import Icon, { type IconName } from "@/components/icons/Icon";
+import { CHECKIN_CONFIRMATION_AWAY } from "@/lib/app-copy";
 import type { UrgencyKind } from "@/lib/plan/goal-today";
 import { VISIBLE_TASKS } from "@/lib/plan/goal-today";
 import { goalPath } from "@/lib/routes";
@@ -113,6 +114,9 @@ export default function TodayGoalSections({ sections }: { sections: TodaySection
   const [remembered, setRemembered] = useState<Record<string, boolean> | null>(null);
   const [shown, setShown] = useState<Record<string, number>>({});
   const [coachFor, setCoachFor] = useState<string | null>(null);
+  // Screen-level, not row-level: the row a check-in describes leaves the list
+  // on the refresh that follows, taking any message inside it along.
+  const [recorded, setRecorded] = useState<CheckInState | null>(null);
 
   useEffect(() => setRemembered(readStored()), []);
 
@@ -143,6 +147,19 @@ export default function TodayGoalSections({ sections }: { sections: TodaySection
 
   return (
     <div className="mt-6 space-y-4">
+      {/* Announced without stealing focus, and it stays until the next
+          check-in: a confirmation that times out is one a slow reader never
+          sees. */}
+      {recorded && recorded !== "waiting_on_someone" && (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-2xl bg-blush-light px-4 py-3 text-[0.95rem] font-medium text-berry"
+        >
+          <Icon name="check" className="mt-0.5 h-4 w-4" />
+          {CHECKIN_CONFIRMATION_AWAY[recorded]}
+        </p>
+      )}
+
       {sections.map((section, index) => {
         const open = isOpen(section.goalId, index);
         const visible = shown[section.goalId] ?? VISIBLE_TASKS;
@@ -271,6 +288,7 @@ export default function TodayGoalSections({ sections }: { sections: TodaySection
                                 taskId={task.id}
                                 reminderId={task.reminderId}
                                 onNeedsCoach={setCoachFor}
+                                onRecorded={setRecorded}
                               />
                             )}
                           </div>

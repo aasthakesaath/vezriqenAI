@@ -7,6 +7,7 @@
  * answers would be inventing state that can then disagree with itself.
  */
 
+import { OPEN_TASK_STATUSES } from "./task-status";
 import { FALLBACK_TIME_ZONE, addDays, dayKeyIn, toDayKey, type DayKey } from "@/lib/time-zone";
 
 export type PlanTask = {
@@ -43,7 +44,7 @@ export function isPlanView(value: string | undefined): value is PlanView {
   return value === "today" || value === "week" || value === "month";
 }
 
-const OPEN = new Set(["not_started", "in_progress", "unconfirmed", "partial"]);
+const OPEN = new Set<string>(OPEN_TASK_STATUSES);
 
 /**
  * The last calendar day a view covers, where the user is.
