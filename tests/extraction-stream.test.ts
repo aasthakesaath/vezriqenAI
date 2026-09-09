@@ -40,6 +40,9 @@ vi.mock("@/lib/db/verify-schema", () => ({
 }));
 
 vi.mock("@/lib/plan/build", () => ({
+  // The route asks whether the run handed back with work left before it treats
+  // the result as final.
+  isIncomplete: (result: { incomplete?: boolean }) => result.incomplete === true,
   buildPlanForGoal: async (options: {
     onProgress?: (event: { phase: string; milestones?: number }) => void;
   }) => {

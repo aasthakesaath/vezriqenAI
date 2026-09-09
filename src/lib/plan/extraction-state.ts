@@ -176,28 +176,32 @@ export async function setExtractionState(options: {
   state: ExtractionState;
   note?: string | null;
   bumpAttempt?: boolean;
+  /**
+   * Refresh started_at without spending an attempt.
+   *
+   * A run split across several requests is one asking. Each request restamps
+   * so that a continuation the platform kills is still readable as dead, but
+   * only the first one counts against the retry cap.
+   */
+  restamp?: boolean;
 }): Promise<void> {
-  const { supabase, progress, state, note, bumpAttempt } = options;
+  const { supabase, progress, state, note, bumpAttempt, restamp } = options;
 
   progress.state = state;
   if (note !== undefined) progress.note = note;
-  if (bumpAttempt) {
-    progress.attempts += 1;
-    progress.startedAt = new Date();
-  }
+  if (bumpAttempt) progress.attempts += 1;
+  if (bumpAttempt || restamp) progress.startedAt = new Date();
 
   const { error } = await supabase
     .from("goals")
     .update({
       extraction_state: state,
       extraction_note: progress.note,
-      ...(bumpAttempt
-        ? {
-            extraction_attempts: progress.attempts,
-            // Stamped when the run begins, so a reader can tell a live run
-            // from one the platform killed mid-statement.
-            extraction_started_at: progress.startedAt?.toISOString() ?? null,
-          }
+      ...(bumpAttempt ? { extraction_attempts: progress.attempts } : {}),
+      // Stamped when the run begins, so a reader can tell a live run from one
+      // the platform killed mid-statement.
+      ...(bumpAttempt || restamp
+        ? { extraction_started_at: progress.startedAt?.toISOString() ?? null }
         : {}),
     })
     .eq("id", progress.goalId);

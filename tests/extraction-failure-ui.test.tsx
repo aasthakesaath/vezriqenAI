@@ -69,7 +69,10 @@ describe("the client cannot wait forever", () => {
   it("treats a stream that ends without a verdict as a failure", () => {
     // Silence is not success: if the function is killed or a proxy cuts the
     // response, the screen must not sit on the last stage it happened to see.
-    expect(source).toMatch(/if \(!settled\)/);
+    // The verdict is now one of done / again / (nothing). Only the first two
+    // are outcomes; falling off the end of the stream is the third case and
+    // must be treated as a stop, not as a quiet success.
+    expect(source).toMatch(/if \(!verdict\)/);
     expect(source).toMatch(/stopped partway through/);
   });
 
@@ -102,7 +105,19 @@ describe("the waiting copy is honest about how long this takes", () => {
   it("says something true at each stage of the wait", () => {
     expect(source).toContain("Vezri is reading your plan.");
     expect(source).toContain("Larger plans take a minute or two.");
-    expect(source).toContain("Still working — nearly there.");
+    expect(source).toContain("Large plans take a few minutes. Nothing is lost if you wait.");
+  });
+
+  it("never claims to be near the end, because the clock cannot know that", () => {
+    // The 60-second line used to read "Still working — nearly there". On
+    // 2026-09-09 it held that for five minutes on a run that was working
+    // normally; the user assumed the screen was stuck, pressed Try again, and
+    // paid for a second full extraction. A sentence caused that.
+    //
+    // The note is chosen by elapsed time, and elapsed time knows nothing about
+    // how close the end is. No line may imply it.
+    const notes = source.slice(source.indexOf("const NOTES"), source.indexOf("function noteFor"));
+    expect(notes).not.toMatch(/nearly|almost|any (?:second|moment)|shortly|soon|finishing up/i);
   });
 
   it("never shows a countdown or a percentage", () => {

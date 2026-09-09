@@ -50,7 +50,7 @@ vi.mock("@/lib/ai", async (importOriginal) => {
   };
 });
 
-const { buildPlanForGoal } = await import("@/lib/plan/build");
+const { buildPlanForGoal, isIncomplete } = await import("@/lib/plan/build");
 
 const provenance = {
   origin: "inferred" as const,
@@ -406,5 +406,127 @@ describe("a run the platform killed", () => {
     expect(describeStalled({ milestonesWritten: 0, tasksWritten: 0 })).toBe(
       "Vezri started reading this plan and stopped before anything was saved. Try again.",
     );
+  });
+});
+
+describe("staying inside the platform's function ceiling", () => {
+  /**
+   * Vercel kills a function at 300 seconds, mid-statement. Goal 73666d16 was
+   * killed at 02:41:19 on 2026-09-09 having written its last task 17 seconds
+   * earlier, and nothing recorded that it had died.
+   *
+   * So the run stops ITSELF a minute short and hands back. Everything finished
+   * is written, the caller comes straight back, and a hard kill becomes an
+   * ordinary return.
+   */
+  it("hands back between passes when the budget is spent, never inside one", async () => {
+    const supabase = fakeSupabase(seed());
+    // An already-spent budget: the first pass still runs to completion,
+    // because the check only bites once something has been written.
+    const result = await buildPlanForGoal({
+      supabase: supabase.client,
+      userId: "user-1",
+      goalId: "goal-1",
+      today: "2026-09-08",
+      budgetMs: -1,
+    });
+
+    expect(isIncomplete(result)).toBe(true);
+    // Exactly one pass bought, and recorded — not a half-written one.
+    expect(ledger(supabase.db).extraction_passes).toEqual({ structure: true });
+    expect(provider.calls).toEqual(["extract_plan_structure"]);
+    // Still in_progress, with a stamp, so a caller that never returns is
+    // readable as dead rather than as running.
+    expect(ledger(supabase.db).extraction_state).toBe("in_progress");
+    expect(ledger(supabase.db).extraction_started_at).toBeTruthy();
+  });
+
+  it("finishes the plan across successive requests, buying each pass once", async () => {
+    const supabase = fakeSupabase(seed());
+    let requests = 0;
+
+    for (;;) {
+      const result = await buildPlanForGoal({
+        supabase: supabase.client,
+        userId: "user-1",
+        goalId: "goal-1",
+        today: "2026-09-08",
+        budgetMs: -1,
+        continuation: requests > 0,
+      });
+      requests += 1;
+      if (!isIncomplete(result)) break;
+      if (requests > 20) throw new Error("did not converge");
+    }
+
+    // Five passes across five requests, and each model call made exactly once.
+    expect(requests).toBe(5);
+    expect(provider.calls).toEqual([
+      "extract_plan_structure",
+      "extract_plan_tasks_1",
+      "extract_plan_tasks_2",
+      "extract_plan_tasks_3",
+      "smart_target",
+    ]);
+    expect(ledger(supabase.db).extraction_state).toBe("complete");
+  });
+
+  it("spends one attempt for the whole reading, not one per request", async () => {
+    const supabase = fakeSupabase(seed());
+    for (let request = 0; request < 3; request += 1) {
+      await buildPlanForGoal({
+        supabase: supabase.client,
+        userId: "user-1",
+        goalId: "goal-1",
+        today: "2026-09-08",
+        budgetMs: -1,
+        continuation: request > 0,
+      });
+    }
+    // Otherwise a long plan would exhaust the six-attempt cap by finishing.
+    expect(ledger(supabase.db).extraction_attempts).toBe(1);
+  });
+});
+
+describe("a goal that has already been read", () => {
+  /**
+   * A confirmed target is written by the final pass and by nothing else, so it
+   * is proof the run finished. A second request used to re-run everything from
+   * scratch — deleting every milestone and buying the document again — which
+   * is exactly what happened to e2893b2b at 02:44:47 on 2026-09-09.
+   */
+  const alreadyRead = () => {
+    const supabase = fakeSupabase(seed());
+    return supabase;
+  };
+
+  it("returns the stored plan without calling the model", async () => {
+    const supabase = alreadyRead();
+    await run(supabase.client);
+    const milestonesAfterFirstRun = supabase.db.milestones.length;
+
+    provider.calls.length = 0;
+    const result = await run(supabase.client);
+
+    expect(provider.calls).toEqual([]);
+    expect(isIncomplete(result)).toBe(false);
+    // And nothing was deleted on the way past.
+    expect(supabase.db.milestones).toHaveLength(milestonesAfterFirstRun);
+  });
+
+  it("reads it again only when explicitly asked", async () => {
+    const supabase = alreadyRead();
+    await run(supabase.client);
+
+    provider.calls.length = 0;
+    await buildPlanForGoal({
+      supabase: supabase.client,
+      userId: "user-1",
+      goalId: "goal-1",
+      today: "2026-09-08",
+      redo: true,
+    });
+
+    expect(provider.calls.length).toBeGreaterThan(0);
   });
 });

@@ -268,6 +268,34 @@ export type BuildResult = {
 };
 
 /**
+ * The run spent its wall-clock budget with passes still to go.
+ *
+ * Not a failure: everything finished is written, and the caller resumes into a
+ * fresh request. This exists because Vercel kills a function at 300 seconds
+ * mid-statement, and a killed process cannot record anything — including that
+ * it died. Stopping ourselves a minute short turns a hard kill into an
+ * ordinary return.
+ */
+export type BuildIncomplete = {
+  incomplete: true;
+  /** Passes written across every attempt so far, for the log. */
+  passesDone: number;
+};
+
+export function isIncomplete(result: BuildResult | BuildIncomplete): result is BuildIncomplete {
+  return (result as BuildIncomplete).incomplete === true;
+}
+
+/**
+ * How long one request may spend before handing back to the caller.
+ *
+ * Vercel's ceiling is 300s and it is not negotiable on this plan. 240 leaves a
+ * minute for the pass in flight to finish its writes, which is the difference
+ * between resuming from the last completed pass and losing it.
+ */
+export const REQUEST_BUDGET_MS = 240_000;
+
+/**
  * Reads a goal's plan document, extracts structure, and persists it with
  * provenance (PRD §7).
  *
@@ -482,6 +510,71 @@ async function writeTaskBatch(options: {
     await supabase.from("task_dependencies").insert(dependencyRows);
   }
 }
+/**
+ * The result for a goal that has already been read, assembled from the rows.
+ *
+ * No model call, no deletion, no bookkeeping — the work is done and this is
+ * simply reporting it. A second request used to re-run the whole extraction
+ * here, deleting every milestone and buying the document again.
+ */
+async function storedResult(options: {
+  supabase: Client;
+  goalId: string;
+  today: string;
+  timeZone: string;
+}): Promise<BuildResult> {
+  const { supabase, goalId, today } = options;
+
+  const [{ data: goal }, { data: milestoneRows }, { count: taskCount }] = await Promise.all([
+    supabase
+      .from("goals")
+      .select("user_goal_text, normalized_goal, short_label, target_date, success_criteria, constraints")
+      .eq("id", goalId)
+      .single(),
+    supabase.from("milestones").select("id, title, target_date, status").eq("goal_id", goalId),
+    supabase.from("tasks").select("id", { count: "exact", head: true }).eq("goal_id", goalId),
+  ]);
+
+  const milestones = milestoneRows ?? [];
+
+  return {
+    plan: {
+      outcome: goal?.normalized_goal ?? goal?.user_goal_text ?? "Your goal",
+      target_date: goal?.target_date ?? null,
+      success_measures: (goal?.success_criteria as string[]) ?? [],
+      constraints: (goal?.constraints as string[]) ?? [],
+      risks: [],
+      evidence_required: [],
+      milestones: [],
+      tasks: [],
+      clarifying_questions: [],
+      reasoning: "Already read.",
+    },
+    smart: {
+      user_wording: goal?.user_goal_text ?? "",
+      normalized_goal: goal?.normalized_goal ?? "Your goal",
+      short_label: goal?.short_label ?? "Your goal",
+      target_date: goal?.target_date ?? null,
+      success_measures: (goal?.success_criteria as string[]) ?? [],
+      constraints: (goal?.constraints as string[]) ?? [],
+      feasibility_note: null,
+      missing_information: [],
+      reasoning: "Already read.",
+    },
+    milestoneCount: milestones.length,
+    taskCount: taskCount ?? 0,
+    pastPlan: inspectPlanDates({
+      today,
+      items: milestones.map((m) => ({
+        id: m.id,
+        title: m.title,
+        date: toDayKey(m.target_date),
+        done: m.status === "done",
+      })),
+    }),
+  };
+}
+
 export async function buildPlanForGoal(options: {
   supabase: Client;
   userId: string;
@@ -489,8 +582,38 @@ export async function buildPlanForGoal(options: {
   today?: string;
   /** Reported as each pass completes, so the UI can show real progress. */
   onProgress?: (event: ExtractionProgress) => void;
-}): Promise<BuildResult> {
+  /**
+   * True when the caller is continuing a run it already started, rather than
+   * starting one. A continuation does not spend an attempt — the retry cap
+   * counts times the user asked, not chunks of one asking.
+   */
+  continuation?: boolean;
+  /** Wall-clock budget for THIS request. Defaults to REQUEST_BUDGET_MS. */
+  budgetMs?: number;
+  /** Read the plan again from scratch, discarding what is there. Never implicit. */
+  redo?: boolean;
+}): Promise<BuildResult | BuildIncomplete> {
   const { supabase, userId, goalId } = options;
+  const deadline = Date.now() + (options.budgetMs ?? REQUEST_BUDGET_MS);
+  // Passes completed inside THIS request. A continuation that finishes none is
+  // not making progress, and resuming it again would loop forever.
+  let passesThisRequest = 0;
+  const outOfTime = () => passesThisRequest > 0 && Date.now() > deadline;
+
+  /**
+   * Stop cleanly with work still to do.
+   *
+   * The state stays in_progress with a fresh started_at, so a caller that
+   * never comes back is still readable as dead rather than as running.
+   */
+  const handOff = async (): Promise<BuildIncomplete> => {
+    console.info(
+      `[extract] goal ${goalId} handing off after ${passesThisRequest} pass(es) this request; ` +
+        `${Object.keys(progress.passes).length} done in total.`,
+    );
+    return { incomplete: true, passesDone: Object.keys(progress.passes).length };
+  };
+
   // The model's only "now". In the USER's zone, not the server's: a plan read
   // at 8 PM in Texas was being told it was already tomorrow.
   const { timeZone } = await loadUserSettings(supabase);
@@ -499,10 +622,19 @@ export async function buildPlanForGoal(options: {
 
   const { data: goal, error: goalError } = await supabase
     .from("goals")
-    .select("id, user_goal_text")
+    .select("id, user_goal_text, normalized_goal")
     .eq("id", goalId)
     .single();
   if (goalError || !goal) throw new Error("That goal no longer exists.");
+
+  // Already read. A confirmed target is the proof — it is written by the final
+  // pass and by nothing else. Re-running would delete every milestone and buy
+  // the whole document again, which is what a stray second request used to do.
+  // `redo` is the deliberate way to ask for that; arriving here twice is not.
+  if (goal.normalized_goal && !options.redo) {
+    console.info(`[extract] goal ${goalId} is already read — returning the stored plan.`);
+    return await storedResult({ supabase, goalId, today, timeZone });
+  }
 
   const { data: documents } = await supabase
     .from("plan_documents")
@@ -515,6 +647,18 @@ export async function buildPlanForGoal(options: {
 
   // ---- Where did the last attempt get to? ---------------------------------
   const progress = await loadExtractionProgress(supabase, goalId);
+
+  // A deliberate re-read starts from nothing. Without this, `redo` only skipped
+  // the already-read shortcut and then found every pass marked done, so it made
+  // no model calls and changed nothing — a button that appeared to work.
+  if (options.redo) {
+    progress.passes = {};
+    progress.usage = {};
+    await supabase
+      .from("goals")
+      .update({ extraction_passes: {}, extraction_usage: {}, extracted_structure: null })
+      .eq("id", goalId);
+  }
 
   if (progress.attempts >= MAX_EXTRACTION_ATTEMPTS) {
     // Retries are billable. Past the cap, another Try again would spend money
@@ -531,7 +675,11 @@ export async function buildPlanForGoal(options: {
     progress,
     state: "in_progress",
     note: null,
-    bumpAttempt: true,
+    // A continuation is one asking, carried across several requests — not six
+    // separate attempts at the cap. It still stamps a fresh started_at, so a
+    // continuation the platform kills is still readable as dead.
+    bumpAttempt: !options.continuation,
+    restamp: Boolean(options.continuation),
   });
 
   // An image plan has no text layer; the model reads the picture instead (§22).
@@ -664,6 +812,7 @@ export async function buildPlanForGoal(options: {
         key: PASS_STRUCTURE,
         usage: result.usage,
       });
+      passesThisRequest += 1;
       report({ phase: "structure_done", milestones: structure.milestones.length });
     } else {
       // Resuming: the structure is already in the database.
@@ -692,6 +841,11 @@ export async function buildPlanForGoal(options: {
     // the trade this whole change exists to reverse.
     for (let i = 0; i < batches.length; i += 1) {
       if (isPassDone(progress, taskPassKey(i))) continue;
+
+      // Between passes, never inside one. Everything written stays written and
+      // the caller comes straight back for the rest — a controlled hand-off
+      // instead of a kill at the platform ceiling.
+      if (outOfTime()) return handOff();
 
       const result = await provider.generateStructured({
         action: `extract_plan_tasks_${i + 1}`,
@@ -730,6 +884,7 @@ export async function buildPlanForGoal(options: {
         key: taskPassKey(i),
         usage: result.usage,
       });
+      passesThisRequest += 1;
       batchesDone += 1;
       report({ phase: "tasks", completed: batchesDone, total: batches.length });
     }
@@ -741,6 +896,7 @@ export async function buildPlanForGoal(options: {
     // ===================================================================
     let smart: SmartTarget;
     if (!isPassDone(progress, PASS_TARGET)) {
+      if (outOfTime()) return handOff();
       report({ phase: "target" });
       const smartResult = await provider.generateStructured({
         action: "smart_target",
@@ -778,6 +934,7 @@ export async function buildPlanForGoal(options: {
         key: PASS_TARGET,
         usage: smartResult.usage,
       });
+      passesThisRequest += 1;
     } else {
       smart = await loadStoredTarget(supabase, goalId);
     }

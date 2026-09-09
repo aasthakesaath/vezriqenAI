@@ -18,6 +18,18 @@ type Phase = "reading" | "target" | "plan" | "error";
  */
 const EXTRACTION_TIMEOUT_MS = 330_000;
 
+/**
+ * How many requests one reading may take.
+ *
+ * The server hands back only after completing at least one pass, so this
+ * cannot spin: a plan needs one request per few passes. It is a backstop
+ * against a server that keeps saying "again" without progressing, not a budget.
+ */
+const MAX_CONTINUATIONS = 12;
+
+/** A stop with something to say. Carries the user-facing message, nothing else. */
+class ExtractionStopped extends Error {}
+
 /** One NDJSON line from the extract route. */
 type ExtractEvent =
   | { type: "progress"; phase: "reading" }
@@ -25,6 +37,7 @@ type ExtractEvent =
   | { type: "progress"; phase: "tasks"; completed: number; total: number }
   | { type: "progress"; phase: "tasks_done"; tasks: number }
   | { type: "progress"; phase: "target" }
+  | { type: "incomplete"; passes_done: number }
   | { type: "error"; status: number; error: string }
   | {
       type: "done";
@@ -107,94 +120,131 @@ export default function ReviewFlow({
   // extraction would run twice and bill twice.
   const started = useRef(false);
 
+  /**
+   * One request, and what it wants to happen next.
+   *
+   * Extraction is split across requests because Vercel kills a function at 300
+   * seconds, and a killed process records nothing — not even that it died. The
+   * server stops itself a minute short and hands back instead; this comes
+   * straight back for the rest. Nothing is re-read: resumption picks up at the
+   * first pass that was never written.
+   */
+  const runOnce = useCallback(
+    async (continuation: boolean): Promise<"done" | "again"> => {
+      // A request that never settles is how the screen sat on "Working out the
+      // timing" for six minutes after the server had already answered 422. The
+      // waiting state must be bounded by something the client controls, not by
+      // the server's good behaviour.
+      const abort = new AbortController();
+      const timer = setTimeout(() => abort.abort(), EXTRACTION_TIMEOUT_MS);
+
+      try {
+        const response = await fetch(
+          `/api/goals/${goalId}/extract${continuation ? "?continue=1" : ""}`,
+          { method: "POST", signal: abort.signal },
+        );
+
+        if (!response.ok || !response.body) {
+          // A non-2xx never reaches the stream: read it as JSON and stop.
+          const payload = (await response.json().catch(() => ({}))) as { error?: string };
+          // `||`, not `??`: an empty-string error is nullish-coalesced straight
+          // through, and an empty message used to render as "no error at all".
+          throw new ExtractionStopped(payload.error || "Vezri couldn't read that plan.");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let verdict: "done" | "again" | null = null;
+
+        const handle = (line: string) => {
+          if (!line.trim()) return;
+          let event: ExtractEvent;
+          try {
+            event = JSON.parse(line) as ExtractEvent;
+          } catch {
+            return; // a partial line; the buffer will complete it
+          }
+
+          if (event.type === "progress") {
+            setStage(describeProgress(event));
+            return;
+          }
+          if (event.type === "incomplete") {
+            verdict = "again";
+            return;
+          }
+          if (event.type === "error") {
+            throw new ExtractionStopped(event.error || "Vezri couldn't read that plan.");
+          }
+          if (event.type === "done") {
+            verdict = "done";
+            setQuestions(
+              [...(event.clarifying_questions ?? []), ...(event.missing_information ?? [])].slice(
+                0,
+                3,
+              ),
+            );
+          }
+        };
+
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) handle(line);
+        }
+        handle(buffer);
+
+        if (!verdict) {
+          // The stream ended without a verdict — the function was killed, or a
+          // proxy cut it. Silence is not success.
+          throw new ExtractionStopped(
+            "Vezri stopped partway through reading your plan. Whatever it finished is saved — try again to pick up from there.",
+          );
+        }
+        return verdict;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    [goalId],
+  );
+
   const extract = useCallback(async () => {
     setPhase("reading");
     setError(null);
 
-    // A request that never settles is how the screen sat on "Working out the
-    // timing" for six minutes after the server had already answered 422. The
-    // waiting state must be bounded by something the client controls, not by
-    // the server's good behaviour.
-    const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), EXTRACTION_TIMEOUT_MS);
-
     try {
-      const response = await fetch(`/api/goals/${goalId}/extract`, {
-        method: "POST",
-        signal: abort.signal,
-      });
-
-      if (!response.ok || !response.body) {
-        // A non-2xx never reaches the stream: read it as JSON and stop.
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        // `||`, not `??`: an empty-string error is nullish-coalesced straight
-        // through, and an empty message used to render as "no error at all".
-        setError(payload.error || "Vezri couldn't read that plan.");
-        setPhase("error");
-        return;
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let settled = false;
-
-      const handle = (line: string) => {
-        if (!line.trim()) return;
-        let event: ExtractEvent;
-        try {
-          event = JSON.parse(line) as ExtractEvent;
-        } catch {
-          return; // a partial line; the buffer will complete it
-        }
-
-        if (event.type === "progress") {
-          setStage(describeProgress(event));
-          return;
-        }
-        if (event.type === "error") {
-          settled = true;
-          setError(event.error || "Vezri couldn't read that plan.");
-          setPhase("error");
-          return;
-        }
-        if (event.type === "done") {
-          settled = true;
-          setQuestions(
-            [...(event.clarifying_questions ?? []), ...(event.missing_information ?? [])].slice(0, 3),
-          );
+      // Each pass is bought once. The loop is bounded by the server, which
+      // only asks for another request when the last one made progress.
+      let continuation = false;
+      for (let request = 0; request < MAX_CONTINUATIONS; request += 1) {
+        const verdict = await runOnce(continuation);
+        if (verdict === "done") {
           router.refresh();
           setPhase("target");
+          return;
         }
-      };
-
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) handle(line);
+        continuation = true;
       }
-      handle(buffer);
 
-      if (!settled) {
-        // The stream ended without a verdict — the function was killed, or a
-        // proxy cut it. Silence is not success.
-        setError("Vezri stopped partway through reading your plan. Nothing was saved — try again.");
-        setPhase("error");
-      }
+      throw new ExtractionStopped(
+        "This plan is taking more reading than Vezri expected. Everything it has finished is saved — try again to carry on.",
+      );
     } catch (caught) {
       setError(
-        (caught as Error)?.name === "AbortError"
-          ? "That took longer than expected and Vezri stopped waiting. Your plan is saved — try again."
-          : "Couldn't reach Vezriqen. Check your connection and try again.",
+        caught instanceof ExtractionStopped
+          ? caught.message
+          : (caught as Error)?.name === "AbortError"
+            ? "That took longer than expected and Vezri stopped waiting. Your plan is saved — try again."
+            : "Couldn't reach Vezriqen. Check your connection and try again.",
       );
       setPhase("error");
-    } finally {
-      clearTimeout(timer);
     }
-  }, [goalId, router]);
+  }, [runOnce, router]);
 
   useEffect(() => {
     // `stalled` deliberately blocks the automatic start, not the button: the

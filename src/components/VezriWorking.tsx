@@ -104,14 +104,21 @@ export interface VezriWorkingProps {
  *
  * "This takes a few seconds" was false. A 58 KB plan took 138 seconds in
  * testing, and telling someone "a few seconds" then holding them for over two
- * minutes is most of what makes a slow screen feel broken. These say what is
- * true at the moment they are read, and none of them is a countdown or a
- * percentage — there is nothing honest to count.
+ * minutes is most of what makes a slow screen feel broken.
+ *
+ * NONE OF THESE MAY CLAIM PROXIMITY. The 60-second line used to read "Still
+ * working — nearly there", which is a statement about how close the end is,
+ * and the clock behind it knows nothing about that. On 2026-09-09 it held that
+ * line for five minutes on a run that was working normally; the user assumed
+ * the screen was stuck, pressed Try again, and paid for a second full
+ * extraction. A sentence caused that. What is true at 60 seconds is that large
+ * plans take a few minutes and nothing is lost by waiting — so that is what it
+ * says. tests/vezri-poses.test.tsx holds this rule.
  */
 const NOTES: readonly { after: number; text: string }[] = [
   { after: 0, text: "Vezri is reading your plan." },
   { after: 12_000, text: "Larger plans take a minute or two." },
-  { after: 60_000, text: "Still working — nearly there." },
+  { after: 60_000, text: "Large plans take a few minutes. Nothing is lost if you wait." },
 ];
 
 function noteFor(elapsedMs: number): string {

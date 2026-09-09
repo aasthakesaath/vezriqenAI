@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { buildPlanForGoal } from "@/lib/plan/build";
+import { buildPlanForGoal, isIncomplete } from "@/lib/plan/build";
 import { AIExtractionError } from "@/lib/ai";
 import { AI_CONFIGURED, ConfigurationError, SUPABASE_CONFIGURED } from "@/lib/env";
 import { assertSchemaReady, describeSchemaGaps } from "@/lib/db/verify-schema";
@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /** PRD §5 Step 3 — Vezri reads the plan and builds the execution path. */
-export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   if (!SUPABASE_CONFIGURED) {
     return NextResponse.json({ error: "Vezriqen isn't configured." }, { status: 503 });
   }
@@ -22,6 +22,15 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
   }
 
   const { id } = await context.params;
+  // A CONTINUATION is the client coming straight back for the rest of a run it
+  // already started — it does not spend an attempt against the retry cap.
+  // REDO is the deliberate "read it again from scratch"; without it a goal that
+  // already has a confirmed target is returned as it stands rather than
+  // re-extracted, which is what a stray second request used to do.
+  const query = new URL(request.url).searchParams;
+  const continuation = query.get("continue") === "1";
+  const redo = query.get("redo") === "1";
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -71,8 +80,19 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
           supabase,
           userId: user.id,
           goalId: id,
+          continuation,
+          redo,
           onProgress: (event) => send({ type: "progress", ...event }),
         });
+
+        // The budget ran out with passes still to go. Everything finished is
+        // written; the client comes straight back for the rest. This is what
+        // replaces being killed at the platform's 300-second ceiling.
+        if (isIncomplete(result)) {
+          send({ type: "incomplete", passes_done: result.passesDone });
+          return;
+        }
+
         send({
           type: "done",
           goal_id: id,
