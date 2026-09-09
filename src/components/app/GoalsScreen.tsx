@@ -8,6 +8,7 @@ import { HEALTH_LABELS } from "@/lib/app-copy";
 import type { HealthStatus } from "@/lib/health/score";
 import type { GoalTaskCounts } from "@/lib/plan/goal-progress";
 import { APP_ROUTES, goalPath } from "@/lib/routes";
+import UnfinishedPlans, { type UnfinishedPlanView } from "./UnfinishedPlans";
 
 /**
  * Everything /goals draws, with no database in it. See TodayScreen for why.
@@ -26,7 +27,14 @@ export type GoalCardView = {
   counts: GoalTaskCounts;
 };
 
-export default function GoalsScreen({ goals }: { goals: GoalCardView[] }) {
+export default function GoalsScreen({
+  goals,
+  unfinished = [],
+}: {
+  goals: GoalCardView[];
+  /** Plans Vezri started reading and never finished. Not goals yet. */
+  unfinished?: UnfinishedPlanView[];
+}) {
   return (
     <div className="shell max-w-3xl py-10 lg:py-14">
       <div className="flex items-start justify-between gap-4 sm:gap-6">
@@ -139,6 +147,10 @@ export default function GoalsScreen({ goals }: { goals: GoalCardView[] }) {
           </Link>
         </>
       )}
+
+      {/* Below the goals, always — an unfinished plan is not a goal yet, and
+          putting it above would make the screen open on a problem. */}
+      <UnfinishedPlans plans={unfinished} />
     </div>
   );
 }

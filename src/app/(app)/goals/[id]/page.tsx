@@ -61,13 +61,25 @@ export default async function GoalDashboardPage({
   const supabase = await createClient();
 
   const { timeZone } = await loadUserSettings(supabase);
-  const snapshot = await loadGoalSnapshot({ supabase, goalId: id });
-  if (!snapshot) notFound();
+
+  // The status decides whether this page renders at all, so it is asked for
+  // first. Goal Health is six factors over five queries, and computing it for
+  // a goal that redirects on the very next line is work nobody ever sees —
+  // and, since the score is now recorded, a write nobody asked for.
+  const { data: statusRow } = await supabase
+    .from("goals")
+    .select("status")
+    .eq("id", id)
+    .maybeSingle();
+  if (!statusRow) notFound();
 
   // A goal that hasn't been confirmed yet belongs in the review flow.
-  if (snapshot.goal.status !== "active" && snapshot.goal.status !== "achieved") {
+  if (statusRow.status !== "active" && statusRow.status !== "achieved") {
     redirect(goalReviewPath(id));
   }
+
+  const snapshot = await loadGoalSnapshot({ supabase, goalId: id });
+  if (!snapshot) notFound();
 
   const [{ data: milestones }, { data: tasks }, { data: lastAudit }, { data: documents }, { data: dependencies }] =
     await Promise.all([

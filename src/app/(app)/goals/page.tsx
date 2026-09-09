@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { loadGoalSnapshot } from "@/lib/health/load";
+import { loadUnfinishedPlans } from "@/lib/plan/unfinished";
 import { loadUserSettings } from "@/lib/user-settings";
 import GoalsScreen, { type GoalCardView } from "@/components/app/GoalsScreen";
 import { goalIconFor } from "@/lib/goal-icon";
@@ -33,13 +34,17 @@ export default async function GoalsPage() {
   const now = new Date();
   const supabase = await createClient();
 
-  const [{ data: goals }, settings] = await Promise.all([
+  const [{ data: goals }, settings, unfinished] = await Promise.all([
     supabase
       .from("goals")
       .select("id, short_label, normalized_goal, user_goal_text, target_date, status")
       .in("status", ["active", "achieved"])
       .order("created_at", { ascending: true }),
     loadUserSettings(supabase),
+    // Goals whose extraction never finished appear on no other screen — see
+    // lib/plan/unfinished.ts. They are listed below the real ones, because
+    // they are not goals yet.
+    loadUnfinishedPlans({ supabase }),
   ]);
 
   const rows = goals ?? [];
@@ -103,5 +108,17 @@ export default async function GoalsPage() {
     }),
   );
 
-  return <GoalsScreen goals={cards} />;
+  return (
+    <GoalsScreen
+      goals={cards}
+      unfinished={unfinished.map((plan) => ({
+        goalId: plan.goalId,
+        filename: plan.filename,
+        pasted: plan.pasted,
+        createdAt: plan.createdAt,
+        progress: plan.progress,
+        note: plan.note,
+      }))}
+    />
+  );
 }
