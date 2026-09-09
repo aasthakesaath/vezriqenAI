@@ -22,6 +22,7 @@ import { DEFAULT_GOAL_TAB, isGoalTab, windowFor, type GoalTab } from "@/lib/plan
 import { selectGoalToday, summarizeToday, VISIBLE_TASKS } from "@/lib/plan/goal-today";
 import { OPEN_TASK_STATUSES } from "@/lib/plan/task-status";
 import { describePastPlan, inspectPlanDates } from "@/lib/plan/reshape";
+import DeleteGoal from "@/components/goal/DeleteGoal";
 import { milestoneProgress, planForView } from "@/lib/plan/views";
 import { goalReviewPath } from "@/lib/routes";
 import { formatDayKey } from "@/lib/time";
@@ -406,6 +407,11 @@ export default async function GoalDashboardPage({
           </Link>
         </section>
       )}
+
+      {/* The foot of the page, below the provenance. §23 promises a user can
+          delete a goal and everything derived from it; until now there was an
+          endpoint and no way to reach it. */}
+      <DeleteGoal goalId={id} label={label} />
     </div>
   );
 }

@@ -44,10 +44,12 @@ describe("nothing writes a retired status", () => {
   const ALLOWED = [
     // Defines the retirement and each destination.
     join("lib", "plan", "task-status.ts"),
-    // Reads `check_ins.state === "snoozed"` to count past snoozes. History is
-    // a record of what people actually reported and is never rewritten, so
-    // reading it stays correct after the button is gone.
-    join("lib", "coach", "profile.ts"),
+    // lib/coach/profile.ts used to be on this list: it counted
+    // retired-state `check_ins` rows for the Execution Profile. Reading
+    // history stayed CORRECT after the button was cut, but the count was
+    // taken over a rolling window of recent check-ins, so it was going to
+    // decay to zero and then assert that the person never defers work. The
+    // input was dropped on 2026-09-11 and the exception went with it.
     // "partial" here is a CALENDAR CONNECTION state — some scopes granted,
     // some not. Nothing to do with a task.
     join("components", "app", "CalendarConnection.tsx"),

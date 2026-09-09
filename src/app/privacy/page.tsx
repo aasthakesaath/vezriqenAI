@@ -28,7 +28,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Execution history.</strong> Your responses to reminders and checkpoints &mdash;
-            done, partial, not done, snoozed, stuck, or waiting on someone &mdash; and the notes you
+            done, not done, stuck, or waiting on someone &mdash; and the notes you
             add when something gets in the way.
           </li>
           <li>

@@ -10,6 +10,7 @@ import { getEmailProvider } from "@/lib/email";
 import { VezriPoseImage } from "@/components/VezriWorking";
 import { POSE_FOR } from "@/lib/vezri-poses";
 import { APP_ROUTES } from "@/lib/routes";
+import DeleteAccount from "@/components/app/DeleteAccount";
 
 export const metadata: Metadata = { title: "Settings", robots: { index: false } };
 
@@ -82,6 +83,11 @@ export default async function SettingsPage({
           notice={calendar ?? null}
         />
       </div>
+
+      {/* Last, and outside the settings stack. Everything above changes how
+          Vezri behaves; this ends the account. It is not a setting and does
+          not sit among them. */}
+      <DeleteAccount />
     </div>
   );
 }

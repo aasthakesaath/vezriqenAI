@@ -123,9 +123,37 @@ function FlowColumn({
   );
 }
 
-export default function HomePage() {
+/**
+ * The plain confirmation someone lands on after deleting their account.
+ *
+ * Deliberately unadorned and deliberately here rather than on a page of its
+ * own: the account is gone, so there is nowhere signed-in left to send them,
+ * and a celebration screen for a deletion would be the wrong register. It says
+ * the thing happened and gets out of the way.
+ */
+function AccountDeletedNotice() {
+  return (
+    <div className="border-b border-blush bg-blush-wash">
+      <div className="shell py-4">
+        <p role="status" className="text-ink">
+          Your account and everything in it has been deleted.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ deleted?: string }>;
+}) {
+  const { deleted } = await searchParams;
+
   return (
     <>
+      {deleted === "1" && <AccountDeletedNotice />}
+
       {/* ------------------------------------------------------------ §1 Hero */}
       <section className="relative overflow-hidden bg-gradient-to-b from-blush-wash via-white to-white">
         <div

@@ -14,12 +14,36 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type LearnedProfile = {
   completion_by_time: Record<string, { completed: number; total: number }>;
-  snooze_patterns: { snoozes: number; checkIns: number };
+  /**
+   * A retired input, no longer counted. See SNOOZE_RETIRED_ON.
+   *
+   * The column stays — it is `not null` and dropping it would be a migration
+   * for nothing — but it now holds a marker rather than a number, so an old
+   * count cannot sit there looking current.
+   */
+  snooze_patterns: { retired: true; since: string };
   estimate_accuracy: { samples: number; medianRatio: number | null };
   common_blocks: Record<string, number>;
   effective_interventions: Record<string, { accepted: number; offered: number }>;
   profile_confidence: number;
 };
+
+/**
+ * The day "Snooze" was cut from the app (see lib/plan/task-status.ts).
+ *
+ * This profile used to count `check_ins` rows in the retired snoozed state,
+ * over the most recent 500 check-ins. Nothing writes that state any more, so
+ * the count was going to decay to zero on its own — and a zero here does not
+ * read as "we stopped asking", it reads as "this person never defers work".
+ * That is a confident claim about someone, built from a question no longer put
+ * to them, which is the one thing §10 says the profile must not do.
+ *
+ * So the input is dropped rather than left to fade. The history itself is
+ * untouched: the `check_ins` rows keep the state the user actually reported,
+ * and that record is never rewritten. What is gone is only the derived number,
+ * which nothing read.
+ */
+export const SNOOZE_RETIRED_ON = "2026-09-09";
 
 /** Morning / afternoon / evening from an hour, matching §10's own buckets. */
 export function windowForHour(hour: number): "morning" | "afternoon" | "evening" {
@@ -78,8 +102,6 @@ export async function recomputeExecutionProfile(options: {
     if (row.state === "done") completionByTime[bucket]!.completed += 1;
   }
 
-  const snoozes = rows.filter((r) => r.state === "snoozed").length;
-
   // Which barriers recur. §13 uses this to prefer interventions that fit the
   // person, not just the moment.
   const commonBlocks: Record<string, number> = {};
@@ -100,7 +122,9 @@ export async function recomputeExecutionProfile(options: {
 
   const profile: LearnedProfile = {
     completion_by_time: completionByTime,
-    snooze_patterns: { snoozes, checkIns: rows.length },
+    // Written on every recompute rather than simply left alone, so an
+    // existing profile's stale count is overwritten the next time this runs.
+    snooze_patterns: { retired: true, since: SNOOZE_RETIRED_ON },
     // Actual-vs-estimated needs timed sessions, which arrive with calendar
     // blocks. Reporting zero samples is honest; inventing a ratio is not.
     estimate_accuracy: { samples: 0, medianRatio: null },

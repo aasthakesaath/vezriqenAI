@@ -141,16 +141,28 @@ class Query implements PromiseLike<Result> {
 export type FakeSupabase = {
   client: SupabaseClient;
   db: Tables;
+  /** Object paths in the `plan-documents` bucket, as storage would hold them. */
+  files: Set<string>;
+  /** Auth user ids that still exist. */
+  authUsers: Set<string>;
   /** Makes the next write to `table` fail, the way an unmigrated column does. */
   failWriteOnce: (table: string, message: string) => void;
+  /** Makes the next storage remove() fail, the way a bucket outage does. */
+  failStorageRemoveOnce: (message: string) => void;
 };
 
 /** The signed-in user the fake reports. Seed a `profiles` row with this id to give them settings. */
 export const FAKE_USER_ID = "user-1";
 
-export function fakeSupabase(seed: Tables): FakeSupabase {
+export function fakeSupabase(
+  seed: Tables,
+  options?: { files?: string[]; authUsers?: string[] },
+): FakeSupabase {
   const db: Tables = structuredClone(seed);
+  const files = new Set(options?.files ?? []);
+  const authUsers = new Set(options?.authUsers ?? [FAKE_USER_ID]);
   let pending: { table: string; message: string } | null = null;
+  let pendingStorage: string | null = null;
 
   const writeFails = (table: string) => {
     if (pending?.table !== table) return null;
@@ -159,19 +171,75 @@ export function fakeSupabase(seed: Tables): FakeSupabase {
     return message;
   };
 
+  /**
+   * Enough of the Storage API for account deletion to run against it: a flat
+   * set of paths, listed one directory level at a time the way the real
+   * client does, with folders reported as entries carrying no id.
+   */
+  const bucket = () => ({
+    download: async () => ({ data: null }),
+    list: async (prefix: string, listOptions?: { limit?: number; offset?: number }) => {
+      const limit = listOptions?.limit ?? 100;
+      const offset = listOptions?.offset ?? 0;
+      const base = prefix ? `${prefix}/` : "";
+
+      // name -> is it a file, or a folder standing in for what is beneath it
+      const level = new Map<string, boolean>();
+      for (const path of files) {
+        if (!path.startsWith(base)) continue;
+        const rest = path.slice(base.length);
+        if (!rest) continue;
+        const slash = rest.indexOf("/");
+        if (slash === -1) level.set(rest, true);
+        else level.set(rest.slice(0, slash), false);
+      }
+
+      const entries = [...level.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, isFile]) => ({ name, id: isFile ? `object-${name}` : null }));
+
+      return { data: entries.slice(offset, offset + limit), error: null };
+    },
+    remove: async (paths: string[]) => {
+      if (pendingStorage) {
+        const message = pendingStorage;
+        pendingStorage = null;
+        return { data: null, error: { message } };
+      }
+      // Reports what it actually deleted, which is what lets the code under
+      // test notice a path that did not go.
+      const removed = paths.filter((path) => files.delete(path));
+      return { data: removed.map((name) => ({ name })), error: null };
+    },
+  });
+
   const client = {
     from: (table: string) => new Query(db, table, writeFails),
     // Code under test reads the user's own settings (their timezone, above
     // all) through the client, so the fake has to answer for them too.
-    auth: { getUser: async () => ({ data: { user: { id: FAKE_USER_ID } }, error: null }) },
-    storage: { from: () => ({ download: async () => ({ data: null }) }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: FAKE_USER_ID } }, error: null }),
+      signOut: async () => ({ error: null }),
+      admin: {
+        deleteUser: async (id: string) =>
+          authUsers.delete(id)
+            ? { data: { user: null }, error: null }
+            : { data: null, error: { message: "User not found" } },
+      },
+    },
+    storage: { from: bucket },
   } as unknown as SupabaseClient;
 
   return {
     client,
     db,
+    files,
+    authUsers,
     failWriteOnce: (table, message) => {
       pending = { table, message };
+    },
+    failStorageRemoveOnce: (message) => {
+      pendingStorage = message;
     },
   };
 }

@@ -53,8 +53,12 @@ const text = (el: ReactElement) =>
     .replace(/&trade;/g, "\u2122")
     .replace(/\s+/g, " ");
 
-const home = html(<HomePage />);
-const homeText = text(<HomePage />);
+// HomePage reads searchParams (the post-deletion confirmation), so it is an
+// async server component and has to be awaited into an element before it can
+// be rendered to markup. No query string: this is the ordinary visit.
+const homeElement = await HomePage({ searchParams: Promise.resolve({}) });
+const home = html(homeElement);
+const homeText = text(homeElement);
 const about = html(<AboutPage />);
 const aboutText = text(<AboutPage />);
 const header = html(<Header />);
