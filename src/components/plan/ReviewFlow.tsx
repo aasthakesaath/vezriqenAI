@@ -68,16 +68,31 @@ export default function ReviewFlow({
   initialMilestones,
   initialTasks,
   needsExtraction,
+  stoppedNote = null,
 }: {
   goalId: string;
   initialTarget: TargetCardData | null;
   initialMilestones: PlanMilestone[];
   initialTasks: PlanTask[];
   needsExtraction: boolean;
+  /**
+   * Set when the last run was killed rather than finishing — a Vercel timeout,
+   * a lost process. The server infers it from a stale in_progress, because a
+   * killed function cannot record its own death.
+   *
+   * When it is set the page does NOT start a run of its own. A plan that times
+   * out would otherwise restart on every visit and time out again, forever,
+   * while the screen said it was being read. The user is told what happened
+   * and presses Try again, which resumes.
+   */
+  stoppedNote?: string | null;
 }) {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>(needsExtraction ? "reading" : "target");
-  const [error, setError] = useState<string | null>(null);
+  const stalled = needsExtraction && Boolean(stoppedNote);
+  const [phase, setPhase] = useState<Phase>(
+    stalled ? "error" : needsExtraction ? "reading" : "target",
+  );
+  const [error, setError] = useState<string | null>(stalled ? stoppedNote : null);
   const [questions, setQuestions] = useState<string[]>([]);
   /**
    * The stage line, set ONLY from a server event.
@@ -182,10 +197,13 @@ export default function ReviewFlow({
   }, [goalId, router]);
 
   useEffect(() => {
-    if (!needsExtraction || started.current) return;
+    // `stalled` deliberately blocks the automatic start, not the button: the
+    // user decides whether to spend another run on a plan that already ran out
+    // of time once.
+    if (!needsExtraction || stalled || started.current) return;
     started.current = true;
     void extract();
-  }, [needsExtraction, extract]);
+  }, [needsExtraction, stalled, extract]);
 
   // The wait and the failure are the same component: a model call that fails
   // must not drop the user onto a differently-shaped screen, and keeping both

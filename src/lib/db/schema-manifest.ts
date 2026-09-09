@@ -121,6 +121,7 @@ export const EXPECTED_SCHEMA: Record<string, readonly string[]> = {
     "constraints", // 0001_foundation.sql
     "created_at", // 0001_foundation.sql
     "dates_reshaped_at", // 0008_timezone_and_dates.sql
+    "extraction_state", // 0010_extraction_ledger_on_goals.sql
     "health_score", // 0001_foundation.sql
     "health_status", // 0001_foundation.sql
     "id", // 0001_foundation.sql

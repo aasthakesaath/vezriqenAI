@@ -6,6 +6,11 @@ import { describePastPlan, inspectPlanDates } from "@/lib/plan/reshape";
 import { dayKeyIn, toDayKey } from "@/lib/time-zone";
 import { loadUserSettings } from "@/lib/user-settings";
 import ReviewFlow from "@/components/plan/ReviewFlow";
+import {
+  describeStalled,
+  isRunDead,
+  loadExtractionProgress,
+} from "@/lib/plan/extraction-state";
 import DeleteDocumentButton from "@/components/app/DeleteDocumentButton";
 import { humanFileSize } from "@/lib/ingest/limits";
 import { APP_ROUTES } from "@/lib/routes";
@@ -99,6 +104,15 @@ export default async function GoalReviewPage({ params }: { params: Promise<{ id:
   const document = documents?.[0] ?? null;
   const needsExtraction = !goal.normalized_goal;
 
+  // A run killed at the platform's function ceiling cannot write its own
+  // epitaph, so a stale in_progress is read as dead here rather than being
+  // shown as work still in flight. 73666d16 sat at "being read" for two hours
+  // after a 300-second timeout.
+  const progress = await loadExtractionProgress(supabase, goal.id);
+  const stoppedNote = isRunDead(progress)
+    ? describeStalled({ milestonesWritten: milestones.length, tasksWritten: tasks.length })
+    : null;
+
   // §14 — a plan brought in after its own start dates. Shown here, BEFORE the
   // goal is started, because §6 says the user confirms the plan they will
   // actually run; discovering half of it was overdue after Start Goal is too
@@ -141,6 +155,7 @@ export default async function GoalReviewPage({ params }: { params: Promise<{ id:
       <ReviewFlow
         goalId={goal.id}
         needsExtraction={needsExtraction}
+        stoppedNote={stoppedNote}
         initialTarget={
           goal.normalized_goal
             ? {

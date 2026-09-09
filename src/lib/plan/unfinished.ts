@@ -1,7 +1,13 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PASS_TARGET, type ExtractionState } from "./extraction-state";
+import {
+  EXTRACTION_LEDGER_COLUMNS,
+  PASS_TARGET,
+  isRunDead,
+  progressFromGoal,
+  type ExtractionState,
+} from "./extraction-state";
 
 /**
  * Plans Vezri started reading and never finished.
@@ -25,6 +31,8 @@ export type UnfinishedPlan = {
   milestoneCount: number;
   taskCount: number;
   state: ExtractionState;
+  /** True when a run was killed rather than finishing — inferred, not recorded. */
+  stopped: boolean;
   /** What Vezri already got out of the document, in the user's terms. */
   progress: string;
   /** Why it is worth finishing rather than starting again. */
@@ -66,7 +74,7 @@ export async function loadUnfinishedPlans(options: {
   // everything else is either mid-review or abandoned, and both need a way out.
   const { data: goals } = await supabase
     .from("goals")
-    .select("id, created_at, normalized_goal, status")
+    .select(`id, created_at, normalized_goal, status, ${EXTRACTION_LEDGER_COLUMNS}`)
     .not("status", "in", "(active,achieved)")
     .order("created_at", { ascending: false });
 
@@ -75,12 +83,7 @@ export async function loadUnfinishedPlans(options: {
 
   const goalIds = rows.map((goal) => goal.id);
   const [{ data: documents }, { data: milestones }, { data: tasks }] = await Promise.all([
-    supabase
-      .from("plan_documents")
-      .select(
-        "goal_id, filename, source_kind, extraction_state, extraction_passes, extraction_note",
-      )
-      .in("goal_id", goalIds),
+    supabase.from("plan_documents").select("goal_id, filename, source_kind").in("goal_id", goalIds),
     supabase.from("milestones").select("goal_id").in("goal_id", goalIds),
     supabase.from("tasks").select("goal_id").in("goal_id", goalIds),
   ]);
@@ -102,7 +105,9 @@ export async function loadUnfinishedPlans(options: {
 
     const milestoneCount = milestoneCounts.get(goal.id) ?? 0;
     const taskCount = taskCounts.get(goal.id) ?? 0;
-    const passes = (document.extraction_passes as Record<string, boolean> | null) ?? {};
+    // The ledger lives on the goal since 0010 — it used to be on the document,
+    // where a goal-only goal had nowhere to write it.
+    const progress = progressFromGoal(goal.id, goal as unknown as Record<string, unknown>);
 
     return [
       {
@@ -112,13 +117,15 @@ export async function loadUnfinishedPlans(options: {
         createdAt: goal.created_at as string,
         milestoneCount,
         taskCount,
-        state: (document.extraction_state as ExtractionState) ?? "not_started",
+        state: progress.state,
+        // A run the platform killed cannot say so itself; the reader decides.
+        stopped: isRunDead(progress),
         progress: describeUnfinished({
           milestoneCount,
           taskCount,
-          hasTarget: Boolean(goal.normalized_goal) || passes[PASS_TARGET] === true,
+          hasTarget: Boolean(goal.normalized_goal) || progress.passes[PASS_TARGET] === true,
         }),
-        note: document.extraction_note ?? null,
+        note: progress.note,
       },
     ];
   });

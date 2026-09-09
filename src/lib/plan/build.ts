@@ -281,7 +281,7 @@ export type BuildResult = {
  * A resumed run needs the structure pass's OUTPUT, not just its rows: the task
  * prompts are built from the outcome and the milestone titles. Re-running the
  * structure pass to recover them would defeat the point, so it is stored on the
- * document's audit log and read back.
+ * goal row and read back.
  * ---------------------------------------------------------------------- */
 
 async function storeStructure(
@@ -289,11 +289,11 @@ async function storeStructure(
   progress: ExtractionProgressRecord,
   structure: ExtractedPlanStructure,
 ): Promise<void> {
-  if (!progress.documentId) return;
+  progress.structure = structure;
   const { error } = await supabase
-    .from("plan_documents")
+    .from("goals")
     .update({ extracted_structure: structure })
-    .eq("id", progress.documentId);
+    .eq("id", progress.goalId);
   // Not fatal: the milestone rows are already written, and loadStoredStructure
   // rebuilds from them if this cache is missing. Logged rather than swallowed,
   // so a resumed run that loses the model's wording says why.
@@ -311,15 +311,9 @@ async function loadStoredStructure(
   goalId: string,
   progress: ExtractionProgressRecord,
 ): Promise<ExtractedPlanStructure> {
-  if (progress.documentId) {
-    const { data: cached } = await supabase
-      .from("plan_documents")
-      .select("extracted_structure")
-      .eq("id", progress.documentId)
-      .maybeSingle();
-    const stored = cached?.extracted_structure as ExtractedPlanStructure | null | undefined;
-    if (stored?.milestones) return stored;
-  }
+  // The cache travels on the ledger, so a resumed run already has it in hand.
+  const stored = progress.structure as ExtractedPlanStructure | null | undefined;
+  if (stored?.milestones) return stored;
 
   const [{ data: goal }, { data: milestones }] = await Promise.all([
     supabase
