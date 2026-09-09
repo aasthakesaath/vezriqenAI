@@ -680,6 +680,10 @@ export async function buildPlanForGoal(options: {
     // continuation the platform kills is still readable as dead.
     bumpAttempt: !options.continuation,
     restamp: Boolean(options.continuation),
+    // Before the first model call, and fatal. If the ledger cannot be written
+    // there is no point spending anything: the run would be unrecordable,
+    // unresumable, and invisible to every screen.
+    required: true,
   });
 
   // An image plan has no text layer; the model reads the picture instead (§22).

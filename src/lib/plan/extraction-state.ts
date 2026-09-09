@@ -165,9 +165,16 @@ export async function markPassComplete(options: {
     .update({ extraction_passes: progress.passes, extraction_usage: progress.usage })
     .eq("id", progress.goalId);
 
-  // Loud, not silent. A pass that landed but was not recorded is the exact
-  // failure this whole ledger exists to prevent: resume would buy it again.
-  if (error) console.error(`[extract] could not record pass ${key}: ${error.message}`);
+  // FATAL, not merely loud. A pass that landed but was not recorded will be
+  // bought again by the next run, and if this write failed once it will fail
+  // for every remaining pass — so continuing means paying for the whole
+  // document to record nothing. On 2026-09-09 that is exactly what happened
+  // twice over: ~114,000 tokens, every ledger write refused, nothing kept.
+  if (error) {
+    throw new Error(
+      `Couldn't record the ${key} pass, so the rest of this reading would not be saved: ${error.message}`,
+    );
+  }
 }
 
 export async function setExtractionState(options: {
@@ -184,6 +191,8 @@ export async function setExtractionState(options: {
    * only the first one counts against the retry cap.
    */
   restamp?: boolean;
+  /** Throw rather than log if the write fails. See below. */
+  required?: boolean;
 }): Promise<void> {
   const { supabase, progress, state, note, bumpAttempt, restamp } = options;
 
@@ -206,7 +215,18 @@ export async function setExtractionState(options: {
     })
     .eq("id", progress.goalId);
 
-  if (error) console.error(`[extract] could not set state ${state}: ${error.message}`);
+  // The opening write is fatal: a run that cannot record that it started
+  // cannot record anything else either, and must not spend a model call
+  // finding that out. The closing writes are not — by then the work is done
+  // and saved, and losing the bookkeeping is worse reported than thrown.
+  if (error) {
+    if (options.required) {
+      throw new Error(
+        `Couldn't record that this reading started, so nothing it does would be saved: ${error.message}`,
+      );
+    }
+    console.error(`[extract] could not set state ${state}: ${error.message}`);
+  }
 }
 
 /** Total tokens across every recorded pass, for the log line and the audit. */
