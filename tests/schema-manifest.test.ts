@@ -27,10 +27,19 @@ describe("the generated schema manifest", () => {
     // after a full, billed extraction had already completed.
     expect(EXPECTED_SCHEMA["goals"]).toContain("short_label");
     expect(EXPECTED_SCHEMA["profiles"]).toContain("email_reminders");
+
+    // 0012 and 0013. title_key is the conflict target the plan extraction
+    // upserts against, so a database without it turns every task write into
+    // "there is no unique or exclusion constraint matching the ON CONFLICT
+    // specification" at the end of a paid-for extraction — the exact class of
+    // failure this manifest exists to catch early.
+    expect(EXPECTED_SCHEMA["tasks"]).toContain("title_key");
+    expect(EXPECTED_SCHEMA["tasks"]).toContain("split_at");
+    expect(EXPECTED_SCHEMA["task_guidance"]).toContain("steps");
   });
 
   it("knows about every table the migrations create", () => {
-    expect(Object.keys(EXPECTED_SCHEMA)).toHaveLength(17);
+    expect(Object.keys(EXPECTED_SCHEMA)).toHaveLength(18);
     for (const table of ["goals", "tasks", "milestones", "reminders", "profiles"]) {
       expect(EXPECTED_SCHEMA[table]?.length ?? 0).toBeGreaterThan(3);
     }

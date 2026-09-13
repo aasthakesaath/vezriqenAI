@@ -21,6 +21,7 @@ import {
   tasksPrompt,
 } from "@/lib/ai/prompts";
 import { calculateStartBy, type TaskType } from "./lead-time";
+import { dedupeByTitle, taskTitleKey } from "./task-title-key";
 import { dayKeyIn, toDayKey } from "@/lib/time-zone";
 import { loadUserSettings } from "@/lib/user-settings";
 import { inspectPlanDates, type PastPlanReport } from "./reshape";
@@ -440,7 +441,15 @@ async function writeTaskBatch(options: {
 
   const anchors = await anchorsFor(tasks);
 
-  const rows = tasks.map((task) => {
+  // Two writes of the same title inside one batch. A pass that re-runs already
+  // conflicts with what is stored — that is what the upsert below is for — but
+  // a single batch can also contain the same task twice, and deduplicating
+  // here means the insert writes what it says it writes instead of silently
+  // discarding rows inside the statement. First occurrence wins, which is the
+  // same rule 0012 applied to the duplicates that were already in the table.
+  const unique = dedupeByTitle(tasks, (task) => task.title);
+
+  const rows = unique.map((task) => {
     const deadline = parseDate(task.deadline);
     const { startBy, reason } = calculateStartBy({
       taskType: task.task_type as TaskType,
@@ -474,18 +483,62 @@ async function writeTaskBatch(options: {
     };
   });
 
-  const { data: inserted, error } = await supabase.from("tasks").insert(rows).select("id, title");
+  /**
+   * UPSERT, not insert.
+   *
+   * This is the write that put the same task on the screen twice. A plan is
+   * read in passes (0007, 0010) and a pass that is re-run — a retry, a resumed
+   * run whose ledger did not record it, a second "Try again" — writes its
+   * tasks again. The titles matched; only the model's wording of the RATIONALE
+   * differed, so the row looked new and inserted cleanly. The user got their
+   * day twice over, in two slightly different sets of words, with no way to
+   * tell which copy was real.
+   *
+   * `ignoreDuplicates` keeps the FIRST write of a title, which is the right
+   * one to keep: it is the row the rest of the plan already points at, and it
+   * is the one 0012's cleanup kept for the same reason. The conflict target is
+   * the unique index that migration added, so this is not a convention the
+   * next writer has to remember — a second copy cannot land even if some other
+   * path tries to insert one.
+   */
+  const { error } = await supabase
+    .from("tasks")
+    .upsert(rows, { onConflict: "goal_id,title_key", ignoreDuplicates: true });
   if (error) throw new Error(`Couldn't save tasks: ${error.message}`);
 
-  const taskIds = new Map((inserted ?? []).map((row) => [row.title, row.id]));
+  /**
+   * Read the ids back rather than taking them from the write, and match on the
+   * NORMALISED title.
+   *
+   * Two things break a title-for-id map built from the insert's own RETURNING
+   * clause. An ignored duplicate returns no row at all, so a task an earlier
+   * pass already wrote would be invisible here — and the row that IS stored
+   * may be worded slightly differently from the one this pass produced
+   * ("Email Ms Ndlovu." against "Email Ms Ndlovu"), which is the whole reason
+   * the two were duplicates. Resolving against the key the unique index uses
+   * is what keeps "B depends on A" working across passes.
+   */
+  const { data: stored } = await supabase.from("tasks").select("id, title").eq("goal_id", goalId);
+
+  const taskIds = new Map<string, string>();
+  for (const row of stored ?? []) {
+    const key = taskTitleKey(row.title);
+    if (key && !taskIds.has(key)) taskIds.set(key, row.id);
+  }
+
+  /** The stored row for a title as the model wrote it, whatever its wording. */
+  const idFor = (title: string): string | undefined => {
+    const key = taskTitleKey(title);
+    return key ? taskIds.get(key) : undefined;
+  };
 
   const dependencyRows: Array<Record<string, unknown>> = [];
-  for (const task of tasks) {
-    const taskId = taskIds.get(task.title);
+  for (const task of unique) {
+    const taskId = idFor(task.title);
     if (!taskId) continue;
 
     for (const dependsOnTitle of task.depends_on_titles) {
-      const dependsOnId = taskIds.get(dependsOnTitle);
+      const dependsOnId = idFor(dependsOnTitle);
       if (dependsOnId && dependsOnId !== taskId) {
         dependencyRows.push({
           user_id: userId,

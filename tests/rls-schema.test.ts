@@ -34,6 +34,19 @@ const DENY_ALL_TABLES = ["calendar_credentials", "email_action_tokens"];
 /** Append-only by design: history that must not be rewritten. */
 const APPEND_ONLY_TABLES = ["check_ins", "ai_action_logs", "goal_audits"];
 
+/**
+ * Readable by the owning user, writable only by the service role.
+ *
+ * A third posture, and it needs to exist. DENY_ALL is for secrets the user
+ * must not see either; the ordinary four-policy shape is for rows the user
+ * creates. task_guidance is neither: it is model output ABOUT the user's own
+ * task, so they must be able to read it, and nothing in a browser may write
+ * it — a session that could would be able to put arbitrary text in front of
+ * the user in Vezri's voice. RLS with a select policy and no write policy
+ * denies insert, update and delete to anon and authenticated outright.
+ */
+const READ_ONLY_TABLES = ["task_guidance"];
+
 describe("row level security (PRD §23)", () => {
   it("creates the full data model from PRD §21", () => {
     expect(createdTables.length).toBeGreaterThanOrEqual(17);
@@ -79,11 +92,27 @@ describe("row level security (PRD §23)", () => {
   it("gives every non-secret table insert, update and delete cover", () => {
     for (const table of createdTables) {
       if (DENY_ALL_TABLES.includes(table)) continue;
+      if (READ_ONLY_TABLES.includes(table)) continue;
       expect(sql, `${table} needs an insert policy`).toContain(`create policy "${table}: insert own"`);
       expect(sql, `${table} needs a delete policy`).toContain(`create policy "${table}: delete own"`);
       if (!APPEND_ONLY_TABLES.includes(table)) {
         expect(sql, `${table} needs an update policy`).toContain(
           `create policy "${table}: update own"`,
+        );
+      }
+    }
+  });
+
+  it("keeps the read-only tables writable by nobody but the service role", () => {
+    for (const table of READ_ONLY_TABLES) {
+      expect(createdTables).toContain(table);
+      expect(sql).toContain(`alter table public.${table} enable row level security`);
+      // The read policy is the whole policy set. Any write policy here would
+      // be a way for a session to author text the product presents as Vezri's.
+      expect(sql).toContain(`create policy "${table}: read own"`);
+      for (const write of ["insert", "update", "delete"]) {
+        expect(sql, `${table} must have no ${write} policy`).not.toContain(
+          `on public.${table} for ${write}`,
         );
       }
     }

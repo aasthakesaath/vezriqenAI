@@ -43,7 +43,13 @@ export async function loadToday(options: {
       .from("tasks")
       .select("id, goal_id, milestone_id, title, rationale, task_type, priority, deadline, start_by, estimated_minutes, status")
       .in("goal_id", goalIds)
-      .in("status", [...OPEN_TASK_STATUSES]),
+      .in("status", [...OPEN_TASK_STATUSES])
+      // A task the user broke into smaller pieces is represented by those
+      // pieces now. The row itself is `skipped` and would already be filtered
+      // by the status list above; this states the rule rather than relying on
+      // it, because "never offer a task that was broken up" is the property
+      // that matters and it should not depend on which status it landed in.
+      .is("split_at", null),
     supabase
       .from("reminders")
       .select("id, task_id, scheduled_at")

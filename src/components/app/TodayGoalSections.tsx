@@ -1,31 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import TaskActions, { type CheckInState } from "./TaskActions";
+import TaskGuidance from "./TaskGuidance";
 import ExecutionBlockCoach from "@/components/coach/ExecutionBlockCoach";
+import StuckPanel from "@/components/coach/StuckPanel";
 import Icon, { type IconName } from "@/components/icons/Icon";
 import { CHECKIN_CONFIRMATION_AWAY } from "@/lib/app-copy";
 import type { UrgencyKind } from "@/lib/plan/goal-today";
-import { VISIBLE_TASKS } from "@/lib/plan/goal-today";
 import { goalPath } from "@/lib/routes";
 
 /**
- * §4.5 applied per goal. "Three important things beat 30 tasks."
+ * §4.5 applied to the SCREEN. "Three important things beat 30 tasks."
  *
- * The mockup this was rebuilt from shows five rows and a "Show 5 more", which
- * is ten rows on one screen — a task list, and §4 exists to keep this simpler
- * than one. VISIBLE_TASKS keeps the cap that matters while still letting four
- * goals each say what they need, and nothing is hidden silently: the count of
- * what is behind the control is on the control.
+ * The cap used to be applied per goal, with an accordion around each section
+ * and a "Show 9 more" under it. Five goals then put fifteen rows in the
+ * document and offered forty-five more — a task manager with headings on it,
+ * which is the thing §4 exists to avoid. The cap is now three rows across the
+ * whole page (lib/plan/goal-today's capTodaySections), spread across goals so
+ * a second goal cannot drift unseen, and everything else is on the goals page.
+ *
+ * The accordion went with it, and so did the "2 overdue · 3 due today" pill on
+ * each header. Both existed to make a long list survivable: a section had to
+ * be closable, and a closed section had to say what was inside it. With three
+ * rows on the page there is nothing to close, and a per-goal overdue count is
+ * the wall this screen just removed, rebuilt one goal at a time.
+ *
+ * What a row expands into is now the useful thing: the steps for doing it.
  *
  * The urgency, the badge, the date and the order all come from
  * lib/plan/goal-today — the same module the goal page's own Today list uses,
  * so the two screens cannot describe the same task differently.
  */
-
-/** Remembered per goal, so a section someone closed stays closed tomorrow. */
-const STORAGE_KEY = "vezriqen.today.sections";
 
 export type TodayTaskView = {
   id: string;
@@ -46,8 +53,6 @@ export type TodaySectionView = {
   goalId: string;
   goalLabel: string;
   icon: IconName;
-  /** "2 overdue · 3 due today" */
-  summary: string;
   tasks: TodayTaskView[];
 };
 
@@ -89,53 +94,14 @@ const TONE: Record<UrgencyKind, { chip: string; badge: string; date: string; ico
   },
 };
 
-function readStored(): Record<string, boolean> {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    if (!parsed || typeof parsed !== "object") return {};
-    return Object.fromEntries(
-      Object.entries(parsed as Record<string, unknown>).filter(
-        ([, value]) => typeof value === "boolean",
-      ),
-    ) as Record<string, boolean>;
-  } catch {
-    // Private mode, a quota, a hand-edited value. Defaults are always usable.
-    return {};
-  }
-}
+/** Which panel a row has open, and why it opened. */
+type OpenCoach = { taskId: string; state: "not_done" | "stuck" };
 
 export default function TodayGoalSections({ sections }: { sections: TodaySectionView[] }) {
-  /**
-   * null until the effect has run, so the first client render matches the
-   * server's and hydration has nothing to reconcile. Reading localStorage
-   * during render would be a mismatch on every visit.
-   */
-  const [remembered, setRemembered] = useState<Record<string, boolean> | null>(null);
-  const [shown, setShown] = useState<Record<string, number>>({});
-  const [coachFor, setCoachFor] = useState<string | null>(null);
+  const [coach, setCoach] = useState<OpenCoach | null>(null);
   // Screen-level, not row-level: the row a check-in describes leaves the list
   // on the refresh that follows, taking any message inside it along.
   const [recorded, setRecorded] = useState<CheckInState | null>(null);
-
-  useEffect(() => setRemembered(readStored()), []);
-
-  /**
-   * The top section starts open and the rest start closed, as drawn. That is
-   * only defensible because a closed header still states what is inside it —
-   * see `summary` — so closing is tidying rather than hiding.
-   */
-  const isOpen = (goalId: string, index: number) => remembered?.[goalId] ?? index === 0;
-
-  function toggle(goalId: string, index: number) {
-    const next = { ...(remembered ?? {}), [goalId]: !isOpen(goalId, index) };
-    setRemembered(next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Not being able to remember is not a reason to refuse to open.
-    }
-  }
 
   if (sections.length === 0) {
     return (
@@ -160,177 +126,140 @@ export default function TodayGoalSections({ sections }: { sections: TodaySection
         </p>
       )}
 
-      {sections.map((section, index) => {
-        const open = isOpen(section.goalId, index);
-        const visible = shown[section.goalId] ?? VISIBLE_TASKS;
-        const rows = section.tasks.slice(0, visible);
-        const remaining = section.tasks.length - rows.length;
-        const panelId = `today-section-${section.goalId}`;
-
-        return (
-          <section
-            key={section.goalId}
-            /* No overflow-hidden. It was here to clip children to the rounded
-               corners, and it is also the one ancestor able to clamp the
-               Execution Block Coach — the panel that opens INSIDE this box and
-               is taller than everything else on the screen. Corner rounding is
-               worth a class on the header button; it is not worth a clip that
-               can silently swallow §13's core interaction. */
-            className="rounded-2xl border border-blush bg-white shadow-soft"
+      {sections.map((section) => (
+        <section
+          key={section.goalId}
+          aria-labelledby={`today-goal-${section.goalId}`}
+          /* No overflow-hidden. It was here to clip children to the rounded
+             corners, and it is also the one ancestor able to clamp the panel
+             that opens INSIDE this box — the steps, and §13's coach, both of
+             which are taller than everything else on the screen. Corner
+             rounding is worth a class on the header; it is not worth a clip
+             that can silently swallow the core interaction. */
+          className="rounded-2xl border border-blush bg-white shadow-soft"
+        >
+          {/* A heading, not a button. There is nothing to collapse now that
+              the whole page holds three rows, and a control that hides the
+              only task on the screen is worse than no control. */}
+          <h3
+            id={`today-goal-${section.goalId}`}
+            className="flex items-center gap-3 px-4 py-4 sm:px-5"
           >
-            {/* A real <button> in a heading: the USWDS accordion pattern the
-                rest of the product already follows (see Disclosure.tsx). */}
-            <h3 className="m-0">
-              <button
-                type="button"
-                aria-expanded={open}
-                aria-controls={panelId}
-                onClick={() => toggle(section.goalId, index)}
-                className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-blush-wash sm:px-5 ${
-                  open ? "rounded-t-2xl" : "rounded-2xl"
-                }`}
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blush-light text-berry">
-                  <Icon name={section.icon} />
-                </span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blush-light text-berry">
+              <Icon name={section.icon} />
+            </span>
+            {/* Wraps rather than truncating. A name that has to be cut to fit
+                is a name that should not have been this long — goalLabel
+                guarantees a short one — and CSS truncation is how "By Dec 31,
+                2026, turn Caly…" reached the screen. */}
+            <span className="min-w-0 text-[1.05rem] font-semibold leading-snug text-ink">
+              {section.goalLabel}
+            </span>
+          </h3>
 
-                <span className="min-w-0 flex-1">
-                  {/* Wraps rather than truncating. A name that has to be cut
-                      to fit is a name that should not have been this long —
-                      goalLabel guarantees a short one — and CSS truncation is
-                      how "By Dec 31, 2026, turn Caly…" reached the screen. */}
-                  <span className="block text-[1.05rem] font-semibold leading-snug text-ink">
-                    {section.goalLabel}
-                  </span>
-                  {/* Below 640px the pill would squeeze the goal name to a few
-                      characters, so the count moves under it. INSIDE the
-                      button, not a sibling pulled up with a negative margin:
-                      that margin overlapped the header by 8px and is the third
-                      time this screen has shipped overlapping boxes. */}
-                  <span className="mt-0.5 block text-sm font-semibold text-berry sm:hidden">
-                    {section.summary}
-                  </span>
-                </span>
+          <div className="border-t border-blush">
+            <ul className="divide-y divide-blush/70">
+              {section.tasks.map((task) => {
+                const tone = TONE[task.urgency];
+                const open = coach?.taskId === task.id ? coach : null;
+                return (
+                  <li key={task.id} className="px-4 py-4 sm:px-5">
+                    <div className="flex gap-3.5">
+                      <span
+                        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone.chip}`}
+                      >
+                        <Icon name={tone.icon} className="h-[1.15rem] w-[1.15rem]" />
+                      </span>
 
-                {/* On the header, so a closed section still says what is in it. */}
-                <span className="hidden shrink-0 rounded-pill bg-blush-light px-3 py-1 text-sm font-semibold text-berry sm:inline">
-                  {section.summary}
-                </span>
-
-                <span className={`text-mauve ${open ? "rotate-180" : ""}`}>
-                  <Icon name="chevronDown" />
-                </span>
-              </button>
-            </h3>
-
-            {/* `hidden` rather than unmounted: in-page find still reaches the
-                text, and a screen reader's cursor is not surprised by content
-                appearing from nowhere. */}
-            <div id={panelId} hidden={!open} className="border-t border-blush">
-              <ul className="divide-y divide-blush/70">
-                {rows.map((task) => {
-                  const tone = TONE[task.urgency];
-                  return (
-                    <li key={task.id} className="px-4 py-4 sm:px-5">
-                      <div className="flex gap-3.5">
-                        <span
-                          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone.chip}`}
-                        >
-                          <Icon name={tone.icon} className="h-[1.15rem] w-[1.15rem]" />
-                        </span>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-                            <div className="min-w-0">
-                              {/* uppercase is styling. The string stays a
-                                  sentence so a screen reader reads it as one. */}
-                              <span
-                                className={`inline-block rounded-pill px-2.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide ${tone.badge}`}
-                              >
-                                {task.badge}
-                              </span>
-                              <h4 className="mt-1.5 font-semibold leading-snug text-ink">
-                                {task.title}
-                              </h4>
-                              <p className="mt-0.5 text-sm leading-relaxed text-mauve">
-                                {task.reason}
-                              </p>
-                              {(task.milestoneTitle || task.estimatedMinutes) && (
-                                <p className="mt-1 flex flex-wrap items-center gap-x-2.5 text-sm text-mauve-light">
-                                  {task.milestoneTitle && <span>{task.milestoneTitle}</span>}
-                                  {task.milestoneTitle && task.estimatedMinutes && (
-                                    <span aria-hidden="true">·</span>
-                                  )}
-                                  {task.estimatedMinutes && <span>~{task.estimatedMinutes} min</span>}
-                                </p>
-                              )}
-                            </div>
-
-                            {task.dateLabel && (
-                              <p
-                                className={`flex shrink-0 items-center gap-1.5 text-sm font-semibold ${tone.date}`}
-                              >
-                                <Icon name="calendar" className="h-4 w-4" />
-                                {task.dateLabel}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                          <div className="min-w-0">
+                            {/* uppercase is styling. The string stays a
+                                sentence so a screen reader reads it as one. */}
+                            <span
+                              className={`inline-block rounded-pill px-2.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide ${tone.badge}`}
+                            >
+                              {task.badge}
+                            </span>
+                            <h4 className="mt-1.5 font-semibold leading-snug text-ink">
+                              {task.title}
+                            </h4>
+                            <p className="mt-0.5 text-sm leading-relaxed text-mauve">
+                              {task.reason}
+                            </p>
+                            {(task.milestoneTitle || task.estimatedMinutes) && (
+                              <p className="mt-1 flex flex-wrap items-center gap-x-2.5 text-sm text-mauve-light">
+                                {task.milestoneTitle && <span>{task.milestoneTitle}</span>}
+                                {task.milestoneTitle && task.estimatedMinutes && (
+                                  <span aria-hidden="true">·</span>
+                                )}
+                                {task.estimatedMinutes && <span>~{task.estimatedMinutes} min</span>}
                               </p>
                             )}
                           </div>
 
-                          <div className="mt-3 sm:flex sm:justify-end">
-                            {coachFor === task.id ? (
-                              <ExecutionBlockCoach
-                                taskId={task.id}
-                                taskTitle={task.title}
-                                onDone={() => setCoachFor(null)}
-                              />
-                            ) : (
-                              <TaskActions
-                                taskId={task.id}
-                                reminderId={task.reminderId}
-                                onNeedsCoach={setCoachFor}
-                                onRecorded={setRecorded}
-                              />
-                            )}
-                          </div>
+                          {task.dateLabel && (
+                            <p
+                              className={`flex shrink-0 items-center gap-1.5 text-sm font-semibold ${tone.date}`}
+                            >
+                              <Icon name="calendar" className="h-4 w-4" />
+                              {task.dateLabel}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* The card expands into how to do the thing. It is
+                            above the check-in buttons on purpose: a row that
+                            asks "did you do it?" before it has said how is the
+                            arrangement this replaces. */}
+                        {!open && <TaskGuidance taskId={task.id} />}
+
+                        {/* The buttons sit right on a wide screen; a panel
+                            does not. Pushing a full coach panel into a
+                            right-aligned flex child squeezes it to its
+                            content width and wraps every sentence in it. */}
+                        <div className={open ? "mt-3" : "mt-3 sm:flex sm:justify-end"}>
+                          {open?.state === "stuck" ? (
+                            <StuckPanel
+                              taskId={task.id}
+                              taskTitle={task.title}
+                              onDone={() => setCoach(null)}
+                            />
+                          ) : open?.state === "not_done" ? (
+                            <ExecutionBlockCoach
+                              taskId={task.id}
+                              taskTitle={task.title}
+                              onDone={() => setCoach(null)}
+                            />
+                          ) : (
+                            <TaskActions
+                              taskId={task.id}
+                              reminderId={task.reminderId}
+                              onNeedsCoach={(taskId, state) => setCoach({ taskId, state })}
+                              onRecorded={setRecorded}
+                            />
+                          )}
                         </div>
                       </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
 
-              {(remaining > 0 || visible > VISIBLE_TASKS) && (
-                <button
-                  type="button"
-                  aria-expanded={remaining === 0}
-                  aria-controls={panelId}
-                  onClick={() =>
-                    setShown((current) => ({
-                      ...current,
-                      [section.goalId]: remaining > 0 ? section.tasks.length : VISIBLE_TASKS,
-                    }))
-                  }
-                  className="flex w-full items-center justify-center gap-2 border-t border-blush bg-blush-wash px-5 py-3 text-sm font-semibold text-berry transition-colors hover:bg-blush-light"
-                >
-                  {remaining > 0 ? `Show ${remaining} more` : "Show fewer"}
-                  <span className={remaining === 0 ? "rotate-180" : ""}>
-                    <Icon name="chevronDown" className="h-4 w-4" />
-                  </span>
-                </button>
-              )}
-
-              <p className="border-t border-blush px-4 py-3 sm:px-5">
-                <Link
-                  href={goalPath(section.goalId)}
-                  className="text-sm font-medium text-berry hover:underline"
-                >
-                  Open {section.goalLabel}
-                </Link>
-              </p>
-            </div>
-          </section>
-        );
-      })}
+            {/* The rest of this goal's work, where the whole plan already is.
+                No count: "Show 9 more" was the overdue wall per goal. */}
+            <p className="border-t border-blush px-4 py-3 sm:px-5">
+              <Link
+                href={goalPath(section.goalId)}
+                className="text-sm font-medium text-berry hover:underline"
+              >
+                Open {section.goalLabel}
+              </Link>
+            </p>
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

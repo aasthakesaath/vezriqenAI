@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { createClient, getUser } from "@/lib/supabase/server";
 import { loadToday } from "@/lib/plan/load-today";
 import { todayFor } from "@/lib/plan/today";
-import { selectTodayByGoal } from "@/lib/plan/goal-today";
+import { capTodaySections, selectTodayByGoal } from "@/lib/plan/goal-today";
+import { overdueTasks } from "@/lib/plan/start-today";
 import TodayScreen from "@/components/app/TodayScreen";
 import type { TodaySectionView } from "@/components/app/TodayGoalSections";
 import { goalIconFor } from "@/lib/goal-icon";
@@ -15,14 +16,17 @@ export const metadata: Metadata = { title: "Today", robots: { index: false } };
 /**
  * PRD §17 — what needs you today, grouped by the goal it belongs to.
  *
- * §4.5 caps the day at three priority actions, and the cap is now applied per
- * goal section rather than across the whole screen: three cards in total meant
- * a second goal with two things a month overdue could go entirely unmentioned,
- * which §18 and §15 both care about. Nothing else about the cap moves — a
- * section shows three rows and says how many more there are, and only work
- * that needs attention TODAY is eligible at all. It stays cross-goal on one
- * screen, which is the whole reason §4 gives for not making someone open each
- * goal in turn.
+ * §4.5 caps the day at three priority actions, and the cap is applied ACROSS
+ * THE SCREEN. It was briefly applied per goal section instead, so five goals
+ * put fifteen rows on the page with a "Show 9 more" under each — a backlog
+ * with headings on it, which is what §4.5 exists to prevent. Three rows,
+ * spread across goals so a second goal cannot drift unseen, and everything
+ * else lives on the goals page where the whole plan already is.
+ *
+ * Nothing here counts what is behind. The page used to open with "33 things
+ * are past the date Vezri worked back to", which is a number nobody can act
+ * on, in a sentence that reads as an accusation however carefully it is
+ * worded. What replaces it is one line and one button that moves the work.
  *
  * Which day "today" is comes from the user's zone rather than the server's,
  * and the urgency engine is the one lib/plan/goal-today owns — the same one
@@ -36,7 +40,7 @@ export default async function TodayPage() {
   const user = await getUser();
   const supabase = await createClient();
 
-  const { waitingOn, backlog, goals, tasks, reminderFor, timeZone } = await loadToday({
+  const { waitingOn, goals, tasks, reminderFor, timeZone } = await loadToday({
     supabase,
     now,
   });
@@ -49,7 +53,7 @@ export default async function TodayPage() {
 
   const naming = new Map(goals.map((goal) => [goal.id, goal]));
 
-  const sections: TodaySectionView[] = selectTodayByGoal(
+  const allSections = selectTodayByGoal(
     tasks.map((task) => ({
       id: task.id,
       title: task.title,
@@ -67,7 +71,11 @@ export default async function TodayPage() {
       goalTitle: task.goalTitle,
     })),
     today,
-  ).map((section) => {
+  );
+
+  const { sections: capped, hasMore } = capTodaySections(allSections);
+
+  const sections: TodaySectionView[] = capped.map((section) => {
     // goalLabel no longer consults normalized_goal, so the fallback carries
     // only the name columns. Passing the statement here would imply it is
     // still a source for a name, which is exactly the bug being closed.
@@ -76,7 +84,6 @@ export default async function TodayPage() {
       goalId: section.goalId,
       goalLabel: goalLabel(goal),
       icon: goalIconFor(goal),
-      summary: section.summary,
       tasks: section.tasks.map((task) => ({
         id: task.id,
         title: task.title,
@@ -99,8 +106,11 @@ export default async function TodayPage() {
       greeting={greetingFor({ now, timeZone })}
       firstName={firstName}
       hasGoals={goals.length > 0}
-      behindCount={backlog.behindCount}
-      planBehind={backlog.planBehind}
+      // The same predicate the route uses, so the button is never offered when
+      // there is nothing it would move and never withheld when there is.
+      // lib/plan/start-today owns the definition of "behind".
+      hasOverdue={overdueTasks(tasks, today).length > 0}
+      hasMore={hasMore}
       sections={sections}
       waitingOn={waitingOn.map((task) => ({
         id: task.id,

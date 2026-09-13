@@ -43,7 +43,16 @@ export default function TaskActions({
 }: {
   taskId: string;
   reminderId?: string | null;
-  onNeedsCoach: (taskId: string) => void;
+  /**
+   * The check-in needs a coach, and WHICH one depends on what was said.
+   *
+   * "Not done" and "I'm stuck" are not the same report. The first is an
+   * outcome — the day went another way — and the intervention library (§13)
+   * answers it. The second is a request for help with the work itself, and it
+   * gets the panel that names the obstacle and offers a way through. Passing
+   * only the task id is what made them one screen.
+   */
+  onNeedsCoach: (taskId: string, state: "not_done" | "stuck") => void;
   /**
    * A check-in landed and the page is about to refresh.
    *
@@ -89,8 +98,8 @@ export default function TaskActions({
 
     // §13 — "not done" and "I'm stuck" open the coach rather than rescheduling.
     // The coach appearing in place of these buttons is the confirmation.
-    if (payload.needs_coach) {
-      onNeedsCoach(taskId);
+    if (payload.needs_coach && (state === "not_done" || state === "stuck")) {
+      onNeedsCoach(taskId, state);
       return;
     }
 

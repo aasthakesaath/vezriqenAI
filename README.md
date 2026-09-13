@@ -109,8 +109,14 @@ The Google OAuth client id and secret live in the **Supabase dashboard**
 URI, and Supabase needs `https://www.vezriqen.com/api/auth/google/callback`
 under Authentication → URL Configuration → Redirect URLs.
 
-Apply `supabase/migrations/0001…0004` in order, then run
+Apply every file in `supabase/migrations/` in order, then run
 `supabase/verify_security.sql` and `supabase/verify_rls_cross_user.sql`.
+
+`supabase/pending/` holds the notes for applying a migration to a database that
+is already live — what to measure before it runs, and what to check afterwards.
+`/api/health/schema` compares the live database against
+`src/lib/db/schema-manifest.ts`, which answers "did that actually apply?"
+without a query.
 
 ### AI
 

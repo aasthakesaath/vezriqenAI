@@ -1,19 +1,42 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { taskTitleKey } from "@/lib/plan/task-title-key";
 
 /**
  * A small in-memory stand-in for the PostgREST query builder.
  *
  * Enough of the surface that src/lib/plan/build.ts runs against it unchanged:
- * select/insert/update/delete, eq, order, limit, single/maybeSingle, and head
- * counts. It exists so resumption can be tested for what it actually claims —
- * that a second attempt does not re-run the passes that already landed —
- * rather than against a hand-written double of the code under test.
+ * select/insert/upsert/update/delete, eq, in, is, order, limit,
+ * single/maybeSingle, and head counts. It exists so resumption can be tested
+ * for what it actually claims — that a second attempt does not re-run the
+ * passes that already landed — rather than against a hand-written double of
+ * the code under test.
  */
 
 export type Row = Record<string, unknown>;
 export type Tables = Record<string, Row[]>;
 
-type Op = "select" | "insert" | "update" | "delete";
+/**
+ * Columns Postgres fills in on write, mirrored here.
+ *
+ * `tasks.title_key` is `generated always as (public.task_title_key(title))`
+ * (0012), and the unique index on (goal_id, title_key) is what stops a task
+ * being written twice. A fake that did not generate it would accept the
+ * duplicate write this project just spent a migration removing, and the test
+ * would pass while production did the opposite.
+ */
+const GENERATED: Record<string, Record<string, (row: Row) => unknown>> = {
+  tasks: { title_key: (row) => taskTitleKey(row.title as string | null) },
+};
+
+function withGenerated(table: string, row: Row): Row {
+  const columns = GENERATED[table];
+  if (!columns) return row;
+  const filled: Row = { ...row };
+  for (const [column, compute] of Object.entries(columns)) filled[column] = compute(row);
+  return filled;
+}
+
+type Op = "select" | "insert" | "upsert" | "update" | "delete";
 type Result = { data: unknown; error: { message: string } | null; count?: number };
 
 let nextId = 1;
@@ -27,6 +50,9 @@ class Query implements PromiseLike<Result> {
   private ascending = true;
   private limitTo: number | null = null;
   private singleMode: "one" | "maybe" | null = null;
+  private inFilters: Array<[string, unknown[]]> = [];
+  private conflictOn: string[] = ["id"];
+  private ignoreDuplicates = false;
 
   constructor(
     private readonly db: Tables,
@@ -41,6 +67,21 @@ class Query implements PromiseLike<Result> {
   insert(rows: Row | Row[]) {
     this.op = "insert";
     this.payload = Array.isArray(rows) ? rows : [rows];
+    return this;
+  }
+  /**
+   * `on_conflict` + `resolution=ignore-duplicates`, which is what
+   * `.upsert(rows, { onConflict, ignoreDuplicates: true })` sends.
+   *
+   * The conflict is checked against what is already stored AND against
+   * earlier rows in the same payload, because Postgres does the same: a batch
+   * containing the same key twice inserts it once and does not error.
+   */
+  upsert(rows: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }) {
+    this.op = "upsert";
+    this.payload = Array.isArray(rows) ? rows : [rows];
+    this.conflictOn = (options?.onConflict ?? "id").split(",").map((column) => column.trim());
+    this.ignoreDuplicates = options?.ignoreDuplicates ?? false;
     return this;
   }
   update(values: Row) {
@@ -59,6 +100,11 @@ class Query implements PromiseLike<Result> {
   /** `.is("used_at", null)` — the only form the code under test uses. */
   is(column: string, value: null) {
     this.filters.push([column, value]);
+    return this;
+  }
+  /** `.in("status", [...])` — matches when the row's value is in the list. */
+  in(column: string, values: unknown[]) {
+    this.inFilters.push([column, values]);
     return this;
   }
   order(column: string, options?: { ascending?: boolean }) {
@@ -87,7 +133,16 @@ class Query implements PromiseLike<Result> {
 
   private matching(): Row[] {
     const all = this.db[this.table] ?? [];
-    return all.filter((row) => this.filters.every(([column, value]) => row[column] === value));
+    return all.filter(
+      (row) =>
+        this.filters.every(([column, value]) => row[column] === value) &&
+        this.inFilters.every(([column, values]) => values.includes(row[column])),
+    );
+  }
+
+  /** The value of a row's conflict target, as one comparable string. */
+  private conflictKey(row: Row): string {
+    return this.conflictOn.map((column) => String(row[column] ?? "\u0000")).join("\u0001");
   }
 
   private run(): Result {
@@ -96,13 +151,35 @@ class Query implements PromiseLike<Result> {
       if (failure) return { data: null, error: { message: failure } };
     }
 
-    if (this.op === "insert") {
-      const inserted = this.payload.map((row) => ({
-        id: `id-${nextId++}`,
-        created_at: new Date(Date.now() + nextId).toISOString(),
-        ...row,
-      }));
-      (this.db[this.table] ??= []).push(...inserted);
+    if (this.op === "insert" || this.op === "upsert") {
+      const stored = (this.db[this.table] ??= []);
+      const seen = new Set(
+        this.op === "upsert" ? stored.map((row) => this.conflictKey(row)) : [],
+      );
+
+      const inserted: Row[] = [];
+      for (const row of this.payload) {
+        const filled = withGenerated(this.table, {
+          id: `id-${nextId++}`,
+          created_at: new Date(Date.now() + nextId).toISOString(),
+          ...row,
+        });
+
+        if (this.op === "upsert" && this.ignoreDuplicates) {
+          const key = this.conflictKey(filled);
+          // A NULL generated key never collides, exactly as a unique index
+          // treats NULLs as distinct.
+          const hasNullPart = this.conflictOn.some((column) => filled[column] == null);
+          if (!hasNullPart && seen.has(key)) continue;
+          seen.add(key);
+        }
+
+        stored.push(filled);
+        inserted.push(filled);
+      }
+
+      // An ignored row returns nothing, which is what PostgREST does and what
+      // the calling code has to be able to cope with.
       return { data: inserted, error: null };
     }
     if (this.op === "update") {

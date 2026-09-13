@@ -51,6 +51,10 @@ export const DELETION_ORDER = [
   "check_ins",
   "reminders",
   "task_dependencies",
+  // Before tasks, like every other child. It cascades from the task row and
+  // carries a user_id of its own, so either would clear it — and neither is a
+  // reason to leave model output about someone's work behind on purpose.
+  "task_guidance",
   "tasks",
   "milestones",
   "goal_audits",

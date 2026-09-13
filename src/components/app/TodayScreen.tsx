@@ -1,4 +1,5 @@
 import Link from "next/link";
+import StartFromToday from "./StartFromToday";
 import TodayGoalSections, { type TodaySectionView } from "./TodayGoalSections";
 import VezriNote from "./VezriNote";
 import { APP_ROUTES } from "@/lib/routes";
@@ -24,8 +25,8 @@ export default function TodayScreen({
   greeting,
   firstName,
   hasGoals,
-  behindCount,
-  planBehind,
+  hasOverdue,
+  hasMore,
   sections,
   waitingOn,
 }: {
@@ -34,8 +35,10 @@ export default function TodayScreen({
   greeting: string;
   firstName: string | null;
   hasGoals: boolean;
-  behindCount: number;
-  planBehind: boolean;
+  /** True when something open is dated before today. Never a count. */
+  hasOverdue: boolean;
+  /** True when more needs attention than the three rows shown. */
+  hasMore: boolean;
   sections: TodaySectionView[];
   waitingOn: WaitingOnView[];
 }) {
@@ -56,16 +59,12 @@ export default function TodayScreen({
           </p>
         </div>
 
-        {/* §4.6 — encouragement, and never an exclamation on a day carrying
-            work that slipped. "That happens" is the product's whole posture
-            towards a missed date. */}
-        <VezriNote
-          note={
-            planBehind
-              ? "Some of this slipped. Picking up one thing is a real start."
-              : "Small steps today make big progress."
-          }
-        />
+        {/* §4.6 — encouragement about the work, never about the person's
+            record. It said something different on a day carrying work that had
+            slipped, which meant the screen commented on the slip twice: once
+            in the banner and once here. The banner is gone and so is the
+            variant. One line, the same every day. */}
+        <VezriNote note="Small steps today make big progress." />
       </div>
 
       {!hasGoals ? (
@@ -77,16 +76,15 @@ export default function TodayScreen({
         </div>
       ) : (
         <>
-          {/* §4.6 — said ONCE, here, rather than on every row. Three rows each
-              repeating "this should already have started" is the same reproach
-              three times over, which is how a screen full of overdue work ends
-              up reading as a telling-off. Neutral wording, no exclamation. */}
-          {planBehind && (
-            <p className="mt-6 rounded-2xl border border-blush bg-blush-light px-5 py-4 text-[0.98rem] leading-relaxed text-ink">
-              {behindCount} things are past the date Vezri worked back to. That happens — these are
-              the ones worth picking up first.
-            </p>
-          )}
+          {/* What used to be here: "33 things are past the date Vezri worked
+              back to." A count nobody can act on, at the top of the screen, in
+              a sentence that reads as an accusation however carefully it is
+              worded — and the more behind you were, the larger the number that
+              greeted you.
+
+              One line and one button, and the line is about what the button
+              does rather than about how far behind anything is. */}
+          {hasOverdue && <StartFromToday />}
 
           <TodayGoalSections sections={sections} />
 
@@ -113,11 +111,18 @@ export default function TodayScreen({
             </section>
           )}
 
-          <p className="mt-10">
+          <div className="mt-10">
+            {/* Where the rest of it went. Said without a number, because "and
+                30 more" is the overdue wall in a smaller font. */}
+            {hasMore && (
+              <p className="mb-3 text-[0.98rem] text-mauve">
+                The rest of your plan is on your goals page, whenever you want it.
+              </p>
+            )}
             <Link href={APP_ROUTES.goals} className="btn-secondary">
               See all your goals
             </Link>
-          </p>
+          </div>
         </>
       )}
     </div>

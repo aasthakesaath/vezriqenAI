@@ -47,40 +47,69 @@ function section(id: string, taskCount: number): TodaySectionView {
     goalId: id,
     goalLabel: `Goal ${id}`,
     icon: "trophy",
-    summary: "2 overdue · 3 due today",
     tasks: Array.from({ length: taskCount }, (_, i) => row(i)),
   };
 }
 
-describe("§4.5 — three important things, applied inside each goal", () => {
-  /**
-   * The mockup shows five rows plus "Show 5 more", which is ten rows on one
-   * screen. §4 exists to keep this simpler than a task manager and §4.5 caps
-   * the day at three priority actions; grouping by goal changes which SET the
-   * cap applies to, not the cap.
-   */
-  it("shows three rows and says how many are behind the control", () => {
-    const markup = html(<TodayGoalSections sections={[section("g1", 7)]} />);
-    expect(count(markup, /Task \d/)).toBe(3);
-    expect(text(markup)).toContain("Show 4 more");
-    expect(text(markup)).not.toContain("Task 3");
-  });
-
-  it("offers no control when three or fewer need attention", () => {
+/* ---------------------------------------------------------------------------
+ * §4.5 is now a property of the PAGE, not of this component.
+ *
+ * The cap used to be applied here — three rows per section, with a "Show 9
+ * more" under each. Five goals then put fifteen rows in the document and
+ * offered forty-five more, which is a task manager with headings on it. The
+ * cap moved to lib/plan/goal-today's capTodaySections, which trims to three
+ * across the whole screen before anything is rendered; the arithmetic is
+ * covered in today-by-goal.test.ts.
+ *
+ * What is asserted here is that this component has no second opinion: it draws
+ * exactly what it is handed, and it offers no control that would reveal more.
+ * ------------------------------------------------------------------------- */
+describe("§4.5 — the page shows three things, and this draws what it is given", () => {
+  it("renders every row it is handed and hides none of them", () => {
     const markup = html(<TodayGoalSections sections={[section("g1", 3)]} />);
     expect(count(markup, /Task \d/)).toBe(3);
-    expect(text(markup)).not.toContain("more");
+    for (const title of ["Task 0", "Task 1", "Task 2"]) {
+      expect(text(markup)).toContain(title);
+    }
   });
 
-  it("never renders a backlog, however many goals there are", () => {
-    const many = ["a", "b", "c", "d", "e"].map((id) => section(id, 12));
-    const markup = html(<TodayGoalSections sections={many} />);
-    // Three per section and no more, whether the section is open or closed —
-    // 60 eligible tasks across five goals put 15 rows in the document, of
-    // which one section's worth is on screen.
-    expect(count(markup, /Task \d/)).toBe(3 * many.length);
-    expect(text(markup)).not.toContain("Task 3");
-    expect(count(markup, "Show 9 more")).toBe(many.length);
+  it("offers no way to unfold a backlog", () => {
+    // "Show 4 more" was the control that let one goal put ten rows on the
+    // screen. The rest of the work lives on the goals page now.
+    const markup = html(<TodayGoalSections sections={[section("g1", 3)]} />);
+    expect(text(markup)).not.toMatch(/Show \d+ more/);
+    expect(text(markup)).not.toContain("Show fewer");
+  });
+
+  it("points at the goals page for everything it is not showing", () => {
+    const markup = html(<TodayGoalSections sections={[section("g1", 2)]} />);
+    expect(text(markup)).toContain("Open Goal g1");
+    expect(markup).toContain('href="/goals/g1"');
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * The card explains the work before it asks whether the work is done.
+ * ------------------------------------------------------------------------- */
+describe("§13 — a task says how to do it", () => {
+  const markup = html(<TodayGoalSections sections={[section("g1", 2)]} />);
+
+  it("gives every row a way to expand into steps", () => {
+    expect(count(markup, "Show me how")).toBe(2);
+  });
+
+  it("asks for the steps only when someone asks — not on page load", () => {
+    // The panel is in the document and hidden, so in-page find reaches it and
+    // a screen reader's cursor is not surprised. The fetch is behind the
+    // control: three cards must not be three model calls on first paint.
+    expect(markup).toContain('id="steps-task-0" hidden=""');
+    expect(count(markup, 'aria-expanded="false"')).toBe(2);
+  });
+
+  it("puts the steps above the check-in buttons", () => {
+    // A row that asks "did you do it?" before it has said how is the
+    // arrangement this replaces.
+    expect(markup.indexOf("Show me how")).toBeLessThan(markup.indexOf("I’m stuck"));
   });
 });
 
@@ -148,31 +177,36 @@ describe("§12 — the response set reports what actually happened", () => {
   });
 });
 
-describe("a collapsed section still says what is inside it", () => {
-  const sections = [section("g1", 2), section("g2", 2), section("g3", 2)];
+/* ---------------------------------------------------------------------------
+ * Sections do not collapse any more, and they carry no counts.
+ *
+ * Both existed to make a long list survivable: a section had to be closable,
+ * and a closed section had to state what was inside it so that closing was
+ * tidying rather than hiding. With three rows on the whole page there is
+ * nothing to tidy — and a control that can hide the only task on the screen is
+ * worse than no control. The per-goal count went with it: "12 overdue" beside
+ * a goal name is the wall this screen removed, one goal at a time.
+ * ------------------------------------------------------------------------- */
+describe("a goal section is a heading and its rows", () => {
+  const sections = [section("g1", 1), section("g2", 1), section("g3", 1)];
   const markup = html(<TodayGoalSections sections={sections} />);
 
-  it("opens the first and closes the rest, as drawn", () => {
-    expect(markup).toMatch(/id="today-section-g1"(?! hidden)/);
-    expect(markup).toContain('id="today-section-g2" hidden=""');
-    expect(markup).toContain('id="today-section-g3" hidden=""');
+  it("shows every section's rows without anything to open first", () => {
+    expect(count(markup, /Task \d/)).toBe(3);
+    for (const id of ["g1", "g2", "g3"]) expect(text(markup)).toContain(`Goal ${id}`);
   });
 
-  it("puts the count on the header, so closing tidies rather than hides", () => {
-    // Twice per section: the desktop pill and the line that replaces it below
-    // 640px, where the pill would squeeze the goal name to nothing.
-    expect(count(markup, "2 overdue · 3 due today")).toBe(sections.length * 2);
+  it("names each goal with a heading rather than a toggle", () => {
+    expect(count(markup, 'id="today-goal-g1"')).toBe(1);
+    // The only aria-expanded left on the screen belongs to the steps panel on
+    // each row, which is a real disclosure over real content.
+    expect(count(markup, 'aria-expanded')).toBe(sections.length);
+    expect(markup).toContain('aria-controls="steps-task-0"');
   });
 
-  it("marks every header with the state it is in", () => {
-    expect(count(markup, 'aria-expanded="true"')).toBe(1);
-    expect(count(markup, 'aria-controls="today-section-g2"')).toBeGreaterThan(0);
-  });
-
-  it("keeps the panel in the document rather than unmounting it", () => {
-    // `hidden`, not removed: in-page find still reaches the text and a screen
-    // reader's cursor is not surprised by content appearing from nowhere.
-    expect(markup).toContain('hidden=""');
+  it("counts nothing on a goal header", () => {
+    expect(text(markup)).not.toContain("2 overdue · 3 due today");
+    expect(text(markup)).not.toMatch(/\d+ overdue ·/);
   });
 });
 

@@ -309,3 +309,61 @@ export function selectTodayByGoal(candidates: CrossGoalTask[], today: DayKey): T
       b.tasks.length - a.tasks.length,
   );
 }
+
+/** §4.5 across the whole screen, not per section. */
+export const TODAY_TASK_LIMIT = 3;
+
+/**
+ * Three rows on the page. Not three per goal — three.
+ *
+ * The cap used to be applied inside each section, with a "Show 9 more" under
+ * every one. Five goals then put fifteen rows in the document and offered
+ * forty-five more, which is a backlog with headings on it: the exact thing
+ * §4.5 exists to prevent, rebuilt one goal at a time.
+ *
+ * Round-robin across sections rather than taking the first three rows, for the
+ * reason lib/plan/today.ts already gives for the same choice: three rows from
+ * the same goal hides a second goal drifting entirely, and §18 and §15 both
+ * care about that. Sections arrive most-pressing-first, so the first pass
+ * gives each goal its best row in that order, and only then does a goal get a
+ * second.
+ *
+ * `hasMore` is a BOOLEAN and not a count, deliberately. A number here is the
+ * overdue wall coming back in a smaller font — "and 30 more" is the same
+ * sentence as "33 things are past the date". The rest of the work has a home
+ * (the goals page) and the screen says so; how much of it there is is not
+ * something this screen needs to tell anyone.
+ */
+export function capTodaySections(
+  sections: TodayGoalSection[],
+  limit: number = TODAY_TASK_LIMIT,
+): { sections: TodayGoalSection[]; hasMore: boolean } {
+  const chosen = new Map<string, GoalTodayTask[]>();
+  let taken = 0;
+  let depth = 0;
+  const deepest = Math.max(0, ...sections.map((section) => section.tasks.length));
+
+  while (taken < limit && depth < deepest) {
+    for (const section of sections) {
+      if (taken >= limit) break;
+      const task = section.tasks[depth];
+      if (!task) continue;
+      const existing = chosen.get(section.goalId);
+      if (existing) existing.push(task);
+      else chosen.set(section.goalId, [task]);
+      taken += 1;
+    }
+    depth += 1;
+  }
+
+  const total = sections.reduce((count, section) => count + section.tasks.length, 0);
+
+  return {
+    // Section order is preserved; a section nothing was taken from is dropped
+    // rather than rendered as an empty heading.
+    sections: sections
+      .filter((section) => chosen.has(section.goalId))
+      .map((section) => ({ ...section, tasks: chosen.get(section.goalId)! })),
+    hasMore: total > taken,
+  };
+}

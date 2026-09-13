@@ -32,7 +32,6 @@ function section(overrides: Partial<TodaySectionView> = {}): TodaySectionView {
     goalId: "g1",
     goalLabel: "Build Calyqen",
     icon: "briefcase",
-    summary: "2 overdue · 3 due today",
     tasks: [
       {
         id: "t1",
@@ -147,6 +146,16 @@ describe("a goal name is a name, never the SMART statement", () => {
     const markup = html(<TodayGoalSections sections={[section()]} />);
     const header = markup.slice(0, markup.indexOf("Build Calyqen"));
     expect(header).not.toContain("truncate");
+  });
+
+  it("names the goal once per section and never counts its overdue work", () => {
+    // The header used to carry "2 overdue · 3 due today", twice over — a pill
+    // above 640px and a line below it. That is the overdue wall this screen
+    // removed, rebuilt one goal at a time.
+    const markup = text(html(<TodayGoalSections sections={[section()]} />));
+    expect(markup).toContain("Build Calyqen");
+    expect(markup).not.toMatch(/\d+ overdue/);
+    expect(markup).not.toMatch(/\d+ due today/);
   });
 });
 
