@@ -21,6 +21,7 @@ import {
   tasksPrompt,
 } from "@/lib/ai/prompts";
 import { calculateStartBy, type TaskType } from "./lead-time";
+import { taskTitleKey, withoutDuplicateTitles } from "./task-title";
 import { dayKeyIn, toDayKey } from "@/lib/time-zone";
 import { loadUserSettings } from "@/lib/user-settings";
 import { inspectPlanDates, type PastPlanReport } from "./reshape";
@@ -474,18 +475,61 @@ async function writeTaskBatch(options: {
     };
   });
 
-  const { data: inserted, error } = await supabase.from("tasks").insert(rows).select("id, title");
+  // UPSERT, not insert.
+  //
+  // A plan reaches the model in passes and the same piece of work reaches it
+  // more than once: a task named in its milestone's section and again in the
+  // plan's summary comes back twice, same title, two different rationales.
+  // Both were inserted, and Today rendered one task twice with two different
+  // explanations under it. tasksPrompt already asks each pass to leave other
+  // milestones alone — the duplicates are what that guidance is worth.
+  //
+  // 0012 made the goal refuse a second copy: `tasks.title_key` is generated
+  // from the title and unique per goal. A plain insert against that fails the
+  // WHOLE batch on one repeat, which would turn a cosmetic duplicate into a
+  // lost extraction pass. ignoreDuplicates skips the repeat and writes the
+  // rest, which is the behaviour this has always needed.
+  //
+  // Repeats WITHIN one batch are dropped here first. `on conflict do nothing`
+  // handles them correctly, but the returned rows are only what was actually
+  // inserted, and the dependency wiring below needs to know which titles it
+  // offered.
+  const deduped = withoutDuplicateTitles(rows, (row) => row.title);
+
+  const { error } = await supabase
+    .from("tasks")
+    .upsert(deduped, { onConflict: "goal_id,title_key", ignoreDuplicates: true });
   if (error) throw new Error(`Couldn't save tasks: ${error.message}`);
 
-  const taskIds = new Map((inserted ?? []).map((row) => [row.title, row.id]));
+  // Read the ids back rather than taking them from the upsert.
+  //
+  // ignoreDuplicates returns only the rows it inserted, so a task that was
+  // already there comes back empty — and a dependency pointing at it would be
+  // silently dropped. The goal's own rows are the complete answer, and keying
+  // the map by the normalised title means a dependency written with different
+  // punctuation still resolves to the row it meant.
+  const { data: stored } = await supabase
+    .from("tasks")
+    .select("id, title")
+    .eq("goal_id", goalId);
+
+  const taskIds = new Map<string, string>();
+  for (const row of stored ?? []) {
+    const key = taskTitleKey(row.title);
+    if (key && !taskIds.has(key)) taskIds.set(key, row.id);
+  }
+  const idFor = (title: string): string | undefined => {
+    const key = taskTitleKey(title);
+    return key ? taskIds.get(key) : undefined;
+  };
 
   const dependencyRows: Array<Record<string, unknown>> = [];
   for (const task of tasks) {
-    const taskId = taskIds.get(task.title);
+    const taskId = idFor(task.title);
     if (!taskId) continue;
 
     for (const dependsOnTitle of task.depends_on_titles) {
-      const dependsOnId = taskIds.get(dependsOnTitle);
+      const dependsOnId = idFor(dependsOnTitle);
       if (dependsOnId && dependsOnId !== taskId) {
         dependencyRows.push({
           user_id: userId,

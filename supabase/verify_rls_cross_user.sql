@@ -17,6 +17,12 @@ select id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticat
        label || '@rls-check.invalid'
 from _ids;
 
+-- The role switch below cannot read a table it was not granted. Without this
+-- the script stops at the first insert with "permission denied for table
+-- _ids" and every check after it reports nothing, which reads like a clean
+-- run and is the opposite of one.
+grant select on _ids to authenticated;
+
 -- ---- Alice writes a goal as herself -----------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claims',
@@ -63,5 +69,33 @@ select case when count(*) = 0
             else 'FAIL - session read ' || count(*) || ' credential rows'
        end as secret_table_check
 from public.calendar_credentials;
+
+-- ---- Can Bob WRITE the how-to steps he is shown? ----------------------------
+-- task_guidance is readable by its owner and writable only by the service role
+-- (0013). The rows are rendered to the reader as instructions to follow, so a
+-- session able to author one could put its own text in front of the next
+-- person to open that card. RLS with a select policy and no insert policy is
+-- what makes that impossible; this proves it rather than assuming it.
+do $$
+declare
+  bob uuid := (select id from _ids where label = 'bob');
+  task uuid;
+begin
+  insert into public.goals (user_id, user_goal_text)
+  values (bob, 'Bob: guidance write check')
+  returning id into task;
+
+  insert into public.tasks (user_id, goal_id, title, origin, confidence)
+  values (bob, task, 'Bob: a task of his own', 'inferred', 0.5)
+  returning id into task;
+
+  begin
+    insert into public.task_guidance (task_id, user_id, steps)
+    values (task, bob, '[]'::jsonb);
+    raise notice 'FAIL - a session inserted into task_guidance';
+  exception when insufficient_privilege then
+    raise notice 'PASS - task_guidance refuses a write from a session';
+  end;
+end $$;
 
 rollback;

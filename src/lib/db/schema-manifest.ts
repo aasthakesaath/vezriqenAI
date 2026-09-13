@@ -222,6 +222,13 @@ export const EXPECTED_SCHEMA: Record<string, readonly string[]> = {
     "task_id", // 0002_plan_structure.sql
     "user_id", // 0002_plan_structure.sql
   ],
+  "task_guidance": [
+    "created_at", // 0013_task_guidance.sql
+    "model_version", // 0013_task_guidance.sql
+    "steps", // 0013_task_guidance.sql
+    "task_id", // 0013_task_guidance.sql
+    "user_id", // 0013_task_guidance.sql
+  ],
   "tasks": [
     "completed_at", // 0002_plan_structure.sql
     "confidence", // 0002_plan_structure.sql
@@ -238,11 +245,14 @@ export const EXPECTED_SCHEMA: Record<string, readonly string[]> = {
     "rationale", // 0002_plan_structure.sql
     "recurrence_rule", // 0002_plan_structure.sql
     "source_anchor_id", // 0002_plan_structure.sql
+    "split_at", // 0013_task_guidance.sql
+    "split_from_task_id", // 0013_task_guidance.sql
     "start_by", // 0002_plan_structure.sql
     "start_by_reason", // 0002_plan_structure.sql
     "status", // 0002_plan_structure.sql
     "task_type", // 0002_plan_structure.sql
     "title", // 0002_plan_structure.sql
+    "title_key", // 0012_task_title_dedupe.sql
     "user_id", // 0002_plan_structure.sql
   ],
 };

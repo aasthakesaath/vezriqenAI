@@ -188,15 +188,30 @@ describe("Today's Tasks", () => {
   });
 
   it("keeps all three reachable at 375px, none behind a disclosure", () => {
-    // Nine buttons for three rows, and the only aria-expanded on the card is
-    // the list's own "Show N more" — none of the actions is inside a panel
-    // that can be closed.
     const rows = markup.slice(markup.indexOf("<ul"), markup.lastIndexOf("</ul>"));
-    expect(rows.match(/<button/g)).toHaveLength(9);
-    expect(rows).not.toContain("aria-expanded");
-    // The `hidden` ATTRIBUTE, not the substring: every icon carries
-    // aria-hidden, and matching that would make this assertion meaningless.
-    expect(rows).not.toMatch(/\shidden[=>\s]/);
+
+    // Twelve buttons for three rows: the three responses each row records,
+    // plus the one that opens the how-to steps.
+    expect(rows.match(/<button/g)).toHaveLength(12);
+
+    // Exactly one disclosure per row, and it is the steps panel — the three
+    // responses are never inside something that can be closed. §13's entry
+    // point cannot live behind a toggle.
+    expect(rows.match(/aria-expanded/g)).toHaveLength(3);
+    const panels = [
+      ...rows.matchAll(/<div id="goal-task-steps-[^"]*" hidden=""[^>]*>([\s\S]*?)<\/div>/g),
+    ];
+    expect(panels).toHaveLength(3);
+    for (const [, contents] of panels) {
+      // Closed means EMPTY, not merely invisible: mounting the panel is what
+      // pays for the model call, so a closed card must cost nothing.
+      expect(contents).toBe("");
+    }
+
+    // And the responses themselves are still on every row.
+    for (const action of ["Done", "Not done", "I'm stuck"]) {
+      expect(textOf(rows).match(new RegExp(action, "g")), action).not.toBeNull();
+    }
   });
 
   it("states the badge as a fact, with no menu and no score", () => {

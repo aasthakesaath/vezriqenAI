@@ -2,8 +2,10 @@
 
 import { useId, useState } from "react";
 import Icon, { type IconName } from "@/components/icons/Icon";
-import TaskActions, { type CheckInState } from "@/components/app/TaskActions";
+import TaskActions, { type CheckInState, type CoachRequest } from "@/components/app/TaskActions";
 import ExecutionBlockCoach from "@/components/coach/ExecutionBlockCoach";
+import StuckPanel from "@/components/coach/StuckPanel";
+import TaskGuidance from "@/components/coach/TaskGuidance";
 import {
   CHECKIN_CONFIRMATION,
   GOAL_TODAY_EMPTY,
@@ -73,8 +75,10 @@ function TaskRow({
   task: GoalTaskView;
   onRecorded: (state: CheckInState) => void;
 }) {
-  const [coachOpen, setCoachOpen] = useState(false);
+  const [coach, setCoach] = useState<CoachRequest | null>(null);
+  const [stepsOpen, setStepsOpen] = useState(false);
   const tone = URGENCY[task.urgencyKind];
+  const panelId = `goal-task-steps-${task.id}`;
 
   return (
     <li className="rounded-2xl border border-blush bg-white px-4 py-4 shadow-soft sm:px-5">
@@ -128,21 +132,51 @@ function TaskRow({
             </p>
           )}
 
-          {/* §13 — every row reaches the coach. "Not done" and "I'm stuck"
-              open it rather than quietly rescheduling, which is the whole
+          {/* §13 "didn't know how to start" — asked BEFORE the work is
+              missed rather than after. The panel is only mounted once opened,
+              because mounting it is what pays for the model call. */}
+          <button
+            type="button"
+            aria-expanded={stepsOpen}
+            aria-controls={panelId}
+            onClick={() => setStepsOpen((open) => !open)}
+            className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-berry transition-colors hover:underline"
+          >
+            {stepsOpen ? "Hide the steps" : "How do I do this?"}
+            <Icon name="chevronDown" className={`h-4 w-4 ${stepsOpen ? "rotate-180" : ""}`} />
+          </button>
+          <div id={panelId} hidden={!stepsOpen} className="mt-3">
+            {stepsOpen && <TaskGuidance taskId={task.id} />}
+          </div>
+
+          {/* §13 — every row reaches a coach. "Not done" and "I'm stuck"
+              open one rather than quietly rescheduling, which is the whole
               point of that section, so the actions are never behind a menu
-              and never dropped at a narrow width. */}
-          {coachOpen ? (
+              and never dropped at a narrow width.
+
+              Two panels, because they answer two different sentences. "This
+              didn't happen" gets the Execution Block Coach's single
+              intervention; "I can't get into this" gets the Stuck panel,
+              which names the obstacle and ends in something changing. */}
+          {coach?.state === "stuck" ? (
+            <StuckPanel
+              taskId={task.id}
+              taskTitle={task.title}
+              checkInId={coach.checkInId}
+              onDone={() => setCoach(null)}
+            />
+          ) : coach?.state === "not_done" ? (
             <ExecutionBlockCoach
               taskId={task.id}
               taskTitle={task.title}
-              onDone={() => setCoachOpen(false)}
+              checkInId={coach.checkInId}
+              onDone={() => setCoach(null)}
             />
           ) : (
             <TaskActions
               taskId={task.id}
               reminderId={task.reminderId}
-              onNeedsCoach={() => setCoachOpen(true)}
+              onNeedsCoach={setCoach}
               onRecorded={onRecorded}
             />
           )}

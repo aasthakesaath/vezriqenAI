@@ -35,6 +35,20 @@ const LABELS: Record<"done" | "not_done" | "stuck", { idle: string; busy: string
  * real button on the row at 375px — §13's differentiator cannot live behind a
  * disclosure.
  */
+/** Which panel a check-in opens, and the row it hangs off. */
+export type CoachRequest = {
+  taskId: string;
+  /**
+   * "not_done" opens the Execution Block Coach — one barrier, one
+   * intervention. "stuck" opens the Stuck panel, which names the obstacle and
+   * ends in a change rather than in a closed dialog. Two different asks: one
+   * is "this didn't happen", the other is "I can't get into it".
+   */
+  state: "not_done" | "stuck";
+  /** The check_ins row this came from, so the block is linked to it. */
+  checkInId: string | null;
+};
+
 export default function TaskActions({
   taskId,
   reminderId,
@@ -43,7 +57,7 @@ export default function TaskActions({
 }: {
   taskId: string;
   reminderId?: string | null;
-  onNeedsCoach: (taskId: string) => void;
+  onNeedsCoach: (request: CoachRequest) => void;
   /**
    * A check-in landed and the page is about to refresh.
    *
@@ -84,13 +98,16 @@ export default function TaskActions({
       return;
     }
 
-    const payload = (await response.json().catch(() => ({}))) as { needs_coach?: boolean };
+    const payload = (await response.json().catch(() => ({}))) as {
+      needs_coach?: boolean;
+      check_in_id?: string;
+    };
     setBusy(null);
 
-    // §13 — "not done" and "I'm stuck" open the coach rather than rescheduling.
-    // The coach appearing in place of these buttons is the confirmation.
-    if (payload.needs_coach) {
-      onNeedsCoach(taskId);
+    // §13 — "not done" and "I'm stuck" open a panel rather than rescheduling.
+    // The panel appearing in place of these buttons is the confirmation.
+    if (payload.needs_coach && (state === "not_done" || state === "stuck")) {
+      onNeedsCoach({ taskId, state, checkInId: payload.check_in_id ?? null });
       return;
     }
 

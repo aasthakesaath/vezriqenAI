@@ -13,10 +13,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type Row = Record<string, unknown>;
 export type Tables = Record<string, Row[]>;
 
-type Op = "select" | "insert" | "update" | "delete";
+type Op = "select" | "insert" | "upsert" | "update" | "delete";
 type Result = { data: unknown; error: { message: string } | null; count?: number };
 
 let nextId = 1;
+
+/** The TypeScript half of `public.normalized_task_title` (migration 0012). */
+function titleKey(title: unknown): string {
+  if (typeof title !== "string") return "";
+  return title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
 
 class Query implements PromiseLike<Result> {
   private filters: Array<[string, unknown]> = [];
@@ -27,6 +33,8 @@ class Query implements PromiseLike<Result> {
   private ascending = true;
   private limitTo: number | null = null;
   private singleMode: "one" | "maybe" | null = null;
+  private conflictColumns: string[] = [];
+  private ignoreDuplicates = false;
 
   constructor(
     private readonly db: Tables,
@@ -41,6 +49,22 @@ class Query implements PromiseLike<Result> {
   insert(rows: Row | Row[]) {
     this.op = "insert";
     this.payload = Array.isArray(rows) ? rows : [rows];
+    return this;
+  }
+  /**
+   * Models the one upsert the code under test performs: tasks, on conflict
+   * (goal_id, title_key), ignoring duplicates.
+   *
+   * title_key is a GENERATED column in Postgres (migration 0012), so the
+   * conflict is really on the normalised title — and this has to normalise the
+   * same way or the fake would accept a duplicate the database refuses, which
+   * is the one thing a stand-in for a constraint must not do.
+   */
+  upsert(rows: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }) {
+    this.op = "upsert";
+    this.payload = Array.isArray(rows) ? rows : [rows];
+    this.conflictColumns = (options?.onConflict ?? "").split(",").map((c) => c.trim()).filter(Boolean);
+    this.ignoreDuplicates = options?.ignoreDuplicates ?? false;
     return this;
   }
   update(values: Row) {
@@ -104,6 +128,32 @@ class Query implements PromiseLike<Result> {
       }));
       (this.db[this.table] ??= []).push(...inserted);
       return { data: inserted, error: null };
+    }
+    if (this.op === "upsert") {
+      const existing = this.db[this.table] ?? [];
+      const keyOf = (row: Row) =>
+        this.conflictColumns
+          .map((column) => (column === "title_key" ? titleKey(row.title) : String(row[column] ?? "")))
+          .join("\u0000");
+
+      const taken = new Set(existing.map(keyOf));
+      const written: Row[] = [];
+      for (const row of this.payload) {
+        const key = keyOf(row);
+        // Postgres's speculative insertion catches a repeat within the SAME
+        // statement too, so the fake does as well.
+        if (this.ignoreDuplicates && taken.has(key)) continue;
+        taken.add(key);
+        written.push({
+          id: `id-${nextId++}`,
+          created_at: new Date(Date.now() + nextId).toISOString(),
+          ...row,
+        });
+      }
+      (this.db[this.table] ??= []).push(...written);
+      // ignoreDuplicates returns only what was actually inserted, which is
+      // exactly the behaviour build.ts had to be rewritten around.
+      return { data: written, error: null };
     }
     if (this.op === "update") {
       const matched = this.matching();

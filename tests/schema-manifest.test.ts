@@ -30,7 +30,7 @@ describe("the generated schema manifest", () => {
   });
 
   it("knows about every table the migrations create", () => {
-    expect(Object.keys(EXPECTED_SCHEMA)).toHaveLength(17);
+    expect(Object.keys(EXPECTED_SCHEMA)).toHaveLength(18);
     for (const table of ["goals", "tasks", "milestones", "reminders", "profiles"]) {
       expect(EXPECTED_SCHEMA[table]?.length ?? 0).toBeGreaterThan(3);
     }
