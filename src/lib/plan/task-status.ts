@@ -55,3 +55,70 @@ export type RetiredTaskStatus = keyof typeof RETIRED_TASK_STATUSES;
 export function isOpenTaskStatus(status: string): boolean {
   return (OPEN_TASK_STATUSES as readonly string[]).includes(status);
 }
+
+/**
+ * Every value of the `task_status` enum, in the order 0002 declares them.
+ *
+ * Here so a route can be asked "what do you do with each of these?" and
+ * answer for all nine rather than for the three it happened to think about.
+ * tests/task-state.test.ts iterates this list and fails if a new status is
+ * added without each route deciding what it means.
+ */
+export const TASK_STATUSES = [
+  "not_started",
+  "in_progress",
+  "done",
+  "partial",
+  "not_done",
+  "snoozed",
+  "blocked",
+  "unconfirmed",
+  "skipped",
+] as const;
+
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+/**
+ * Statuses where this ROW's work is over.
+ *
+ * `done` is finished. `skipped` is a task that was broken into smaller ones —
+ * the work is still outstanding, but it is outstanding on the children now,
+ * and the parent is no longer the row to act on.
+ *
+ * Nothing else belongs here, and `blocked` in particular does not: a blocked
+ * task is the most likely thing in the product for someone to press "I'm
+ * stuck" on, and a handler that will not accept one has refused help at the
+ * exact moment it was asked for.
+ */
+export const TERMINAL_TASK_STATUSES = ["done", "skipped"] as const;
+
+export function isTerminalTaskStatus(status: string): boolean {
+  return (TERMINAL_TASK_STATUSES as readonly string[]).includes(status);
+}
+
+/**
+ * Work that still wants doing, however badly it is going.
+ *
+ * Deliberately the COMPLEMENT of terminal rather than a list of its own. An
+ * allow-list is what produced a route that silently refused `blocked`, and it
+ * would do it again the next time a status is added: a new value would be
+ * absent from the list and therefore refused, which is the wrong default. An
+ * unrecognised status is treated as outstanding for the same reason — a
+ * handler should not decline to help because it does not know what state
+ * something is in.
+ *
+ * Not the same set as OPEN_TASK_STATUSES, which is narrower on purpose: that
+ * one answers "does this belong on the day's list", and a blocked task does
+ * not belong there while it still deserves an answer when asked about.
+ */
+export function isOutstandingTaskStatus(status: string): boolean {
+  return !isTerminalTaskStatus(status);
+}
+
+/** Why a terminal task was refused, in the user's words. */
+export function terminalStatusReason(status: string): string {
+  if (status === "skipped") {
+    return "This task was broken into smaller ones, so it isn't the row to work on any more.";
+  }
+  return "This task is already marked done.";
+}

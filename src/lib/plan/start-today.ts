@@ -27,9 +27,7 @@
  */
 
 import { addDays, daysBetween, toDayKey, type DayKey } from "@/lib/time-zone";
-import { OPEN_TASK_STATUSES } from "./task-status";
-
-const OPEN = new Set<string>(OPEN_TASK_STATUSES);
+import { isOutstandingTaskStatus } from "./task-status";
 
 export type ShiftableTask = {
   id: string;
@@ -59,7 +57,14 @@ export function anchorDay(task: ShiftableTask): DayKey | null {
 /** Open work whose own date has already passed. */
 export function overdueTasks(tasks: ShiftableTask[], today: DayKey): ShiftableTask[] {
   return tasks.filter((task) => {
-    if (!OPEN.has(task.status)) return false;
+    // Everything whose work is not over, which is wider than OPEN_TASK_STATUSES
+    // on purpose. That set answers "does this belong on today's list", and it
+    // excludes `blocked` and `not_done` — both of which are outstanding work
+    // carrying a date that has passed, and both of which were therefore left
+    // behind by a button whose whole job is to move the plan forward. A plan
+    // that starts from today with its stuck items still dated in August has
+    // not started from today.
+    if (!isOutstandingTaskStatus(task.status)) return false;
     const anchor = anchorDay(task);
     return anchor !== null && anchor < today;
   });

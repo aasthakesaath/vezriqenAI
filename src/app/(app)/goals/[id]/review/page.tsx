@@ -51,7 +51,11 @@ export default async function GoalReviewPage({ params }: { params: Promise<{ id:
       supabase
         .from("tasks")
         .select(
-          "id, title, rationale, task_type, deadline, start_by, start_by_reason, priority, estimated_minutes, origin, confidence, plan_source_anchors(excerpt), task_dependencies(external_party_name)",
+          // task_dependencies is NOT embedded: it has two foreign keys to tasks, so
+          // the embed is ambiguous and PostgREST refuses the whole query rather
+          // than returning rows. On a route that cost a 404; here it would have
+          // rendered the plan-approval screen with no tasks on it.
+          "id, title, rationale, task_type, deadline, start_by, start_by_reason, priority, estimated_minutes, origin, confidence, plan_source_anchors(excerpt)",
         )
         .eq("goal_id", id),
       supabase
@@ -78,8 +82,30 @@ export default async function GoalReviewPage({ params }: { params: Promise<{ id:
     excerpt: excerptOf(row.plan_source_anchors as AnchorJoin),
   }));
 
+  // Its own query rather than an embed inside the task select above.
+  // task_dependencies has two foreign keys to tasks, so embedding it is
+  // ambiguous: PostgREST refuses the whole query and returns no rows, which on
+  // this screen would be a plan-approval page showing an empty plan. It runs
+  // after the others because it needs the task ids, and joining back the other
+  // way is ambiguous for the same reason.
+  const taskIds = (taskRows ?? []).map((row) => row.id);
+  const { data: dependencyRows } = taskIds.length
+    ? await supabase
+        .from("task_dependencies")
+        .select("task_id, external_party_name")
+        .eq("dependency_type", "external_person")
+        .is("resolved_at", null)
+        .in("task_id", taskIds)
+    : { data: [] as Array<{ task_id: string; external_party_name: string | null }> };
+
+  const waitingOn = new Map<string, string>();
+  for (const dependency of dependencyRows ?? []) {
+    if (dependency.external_party_name && !waitingOn.has(dependency.task_id)) {
+      waitingOn.set(dependency.task_id, dependency.external_party_name);
+    }
+  }
+
   const tasks: PlanTask[] = (taskRows ?? []).map((row) => {
-    const deps = (row.task_dependencies ?? []) as Array<{ external_party_name: string | null }>;
     return {
       id: row.id,
       title: row.title,
@@ -93,7 +119,7 @@ export default async function GoalReviewPage({ params }: { params: Promise<{ id:
       origin: row.origin,
       confidence: Number(row.confidence),
       excerpt: excerptOf(row.plan_source_anchors as AnchorJoin),
-      external_party: deps.find((d) => d.external_party_name)?.external_party_name ?? null,
+      external_party: waitingOn.get(row.id) ?? null,
     };
   });
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser, type Authenticated } from "@/lib/api/auth";
+import { loadOwnTask, waitingOnName } from "@/lib/api/task-access";
 import { getAIProvider, AIExtractionError } from "@/lib/ai";
 import { AI_CONFIGURED } from "@/lib/env";
 import { BLOCK_CATEGORIES, type BlockCategory } from "@/lib/coach/interventions";
@@ -71,16 +72,26 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: "That isn't something Vezri can do here." }, { status: 400 });
   }
 
-  // Read through the CALLER's client throughout, so RLS is the ownership
-  // check: a task belonging to someone else is simply not found.
-  const { data: task } = await supabase
-    .from("tasks")
-    .select(
-      "id, goal_id, milestone_id, title, rationale, task_type, estimated_minutes, priority, status, deadline, start_by, milestones(title), goals(short_label, user_goal_text), task_dependencies(external_party_name)",
-    )
-    .eq("id", id)
-    .maybeSingle();
-  if (!task) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  // Read through the CALLER's client, so RLS is the ownership check: a task
+  // belonging to someone else is simply not found.
+  //
+  // `task_dependencies` is NOT embedded here. It used to be, and that is what
+  // made this route answer 404 for a task that existed — see the header of
+  // lib/api/task-access. Who the task waits on is a separate query, made only
+  // on the path that needs it.
+  const lookup = await loadOwnTask<TaskRow>({
+    supabase,
+    route: "tasks/[id]/stuck",
+    taskId: id,
+    columns:
+      "id, goal_id, milestone_id, title, rationale, task_type, estimated_minutes, priority, status, deadline, start_by, milestones(title), goals(short_label, user_goal_text)",
+    // A blocked task is the single most likely thing someone presses "I'm
+    // stuck" on, and not_done is the second. Only work that is genuinely over
+    // is refused, and it is refused as a 409 that says which state it is in.
+    requireOutstanding: true,
+  });
+  if (!lookup.ok) return lookup.response;
+  const task = lookup.task;
 
   switch (parsed.data.action) {
     case "analyse":
@@ -110,7 +121,6 @@ type TaskRow = {
   start_by: string | null;
   milestones: unknown;
   goals: unknown;
-  task_dependencies: unknown;
 };
 
 /** The caller's client, as requireUser hands it back. */
@@ -144,8 +154,7 @@ async function analyse(options: {
     );
   }
 
-  const deps = (task.task_dependencies ?? []) as Array<{ external_party_name: string | null }>;
-  const externalParty = deps.find((d) => d.external_party_name)?.external_party_name ?? null;
+  const externalParty = await waitingOnName({ supabase, taskId: task.id });
   const reasonLabel =
     BLOCK_CHOICES.find((choice) => choice.id === input.reason)?.label ?? input.reason;
 

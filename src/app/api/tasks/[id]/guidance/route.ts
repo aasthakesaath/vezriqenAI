@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api/auth";
+import { loadOwnTask } from "@/lib/api/task-access";
+import { isTerminalTaskStatus, terminalStatusReason } from "@/lib/plan/task-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAIProvider, AIExtractionError } from "@/lib/ai";
 import { AI_CONFIGURED } from "@/lib/env";
@@ -11,6 +13,19 @@ import {
   tidyGuidance,
 } from "@/lib/coach/guidance";
 import { goalLabel } from "@/lib/goal-label";
+
+/** Only what the prompt and the cache key need. */
+type TaskRow = {
+  id: string;
+  goal_id: string;
+  title: string;
+  status: string;
+  rationale: string | null;
+  task_type: string;
+  estimated_minutes: number | null;
+  milestones: unknown;
+  goals: unknown;
+};
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -43,15 +58,22 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
   const { id } = await context.params;
 
   // Through the caller's client, so RLS is the ownership check. A task
-  // belonging to someone else is simply not found.
-  const { data: task } = await supabase
-    .from("tasks")
-    .select(
-      "id, goal_id, title, rationale, task_type, estimated_minutes, milestones(title), goals(short_label, user_goal_text)",
-    )
-    .eq("id", id)
-    .maybeSingle();
-  if (!task) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  // belonging to someone else is simply not found — and a 404 here now means
+  // exactly that, rather than also covering a query that failed.
+  //
+  // The status is NOT required to be outstanding yet. Reading steps that were
+  // already generated is harmless whatever state the task reached, and a
+  // person looking back at how they did something finished should not be told
+  // it is gone. The check happens below, before anything is GENERATED.
+  const lookup = await loadOwnTask<TaskRow>({
+    supabase,
+    route: "tasks/[id]/guidance",
+    taskId: id,
+    columns:
+      "id, goal_id, title, status, rationale, task_type, estimated_minutes, milestones(title), goals(short_label, user_goal_text)",
+  });
+  if (!lookup.ok) return lookup.response;
+  const task = lookup.task;
 
   // ---- Cached? Then there is nothing to generate. -------------------------
   const { data: cached } = await supabase
@@ -67,6 +89,17 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     if (stored) {
       return NextResponse.json({ steps: stored.steps, cached: true });
     }
+  }
+
+  // Nothing cached, so this is about to cost a model call. THAT is what a
+  // finished task does not get: writing fresh instructions for work that is
+  // over is spend with no reader.
+  if (isTerminalTaskStatus(task.status)) {
+    console.info(`[task] tasks/[id]/guidance: refused task ${id} in terminal state "${task.status}"`);
+    return NextResponse.json(
+      { error: terminalStatusReason(task.status), task_status: task.status, retryable: false },
+      { status: 409 },
+    );
   }
 
   if (!AI_CONFIGURED) {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api/auth";
 import { loadUserSettings } from "@/lib/user-settings";
 import { dayKeyIn } from "@/lib/time-zone";
-import { OPEN_TASK_STATUSES } from "@/lib/plan/task-status";
+import { TERMINAL_TASK_STATUSES } from "@/lib/plan/task-status";
 import {
   describeStartToday,
   isSafeStartToday,
@@ -53,7 +53,10 @@ export async function POST() {
     .from("tasks")
     .select("id, goal_id, title, status, deadline, start_by")
     .in("goal_id", goalIds)
-    .in("status", [...OPEN_TASK_STATUSES]);
+    // Everything except work that is over. Expressed as an exclusion so that
+    // a status added to the enum later is moved rather than silently stranded
+    // in the past — the failure mode an allow-list has already produced once.
+    .not("status", "in", `(${TERMINAL_TASK_STATUSES.join(",")})`);
 
   if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
 
