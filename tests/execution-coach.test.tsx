@@ -1,13 +1,37 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   BLOCK_CATEGORIES,
+  COACH_SYSTEM,
   INTERVENTIONS_FOR,
+  INTERVENTION_TYPES,
+  InterventionSchema,
+  RETIRED_INTERVENTION_TYPES,
+  coachPrompt,
   fallbackIntervention,
   type BlockCategory,
 } from "@/lib/coach/interventions";
+import ExecutionBlockCoach from "@/components/coach/ExecutionBlockCoach";
 import { calculateImpact, isSafeReplan, type Replan } from "@/lib/coach/replan";
 import { bestWindow, rankEffectiveInterventions, windowForHour } from "@/lib/coach/profile";
 import { BLOCK_CHOICES } from "@/lib/app-copy";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: () => {}, push: () => {} }),
+}));
+
+/** Prompts are hard-wrapped for reading; assertions are about the words. */
+const unwrapped = (prompt: string) => prompt.replace(/\s+/g, " ");
+
+const html = (node: React.ReactElement) => renderToStaticMarkup(node);
+const text = (markup: string) =>
+  markup
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&#x27;|&apos;|&rsquo;/g, "'")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 
 /**
  * PRD §13 is the product's core differentiator, and its whole claim rests on
@@ -92,6 +116,182 @@ describe("coaching without the model (PRD §13 must still work)", () => {
     for (const category of BLOCK_CATEGORIES) {
       const intervention = fallbackIntervention(category as BlockCategory, "A task", "Sam");
       expect(intervention.message, `${category}: "${intervention.message}"`).not.toMatch(forbidden);
+    }
+  });
+});
+
+describe("the panel asks once, and one chip is the whole answer", () => {
+  const markup = html(
+    <ExecutionBlockCoach taskId="t1" taskTitle="Finish module 4" onDone={() => {}} />,
+  );
+
+  it("asks the one question §13 asks", () => {
+    expect(text(markup)).toContain("What got in the way?");
+    // The eight choices plus one submit. No ninth chip, no text box.
+    expect(markup.match(/<button/g)).toHaveLength(BLOCK_CATEGORIES.length + 1);
+  });
+
+  /**
+   * The free-text box is gone, for the same reason it went from StuckPanel.
+   *
+   * "Anything else? (optional)" sat under the chips, before anything had been
+   * picked, with no sign that picking was required — and it said the same
+   * thing as the "Something else" chip in a vaguer way. People typed into it
+   * and nothing happened, because the chips were the submit and none had been
+   * clicked.
+   */
+  it("offers no free-text box, and no second way to say Something else", () => {
+    expect(markup).not.toContain("<input");
+    expect(markup).not.toContain("<textarea");
+    expect(text(markup)).not.toContain("Anything else?");
+    // The chip that covers the case is still there, and is the only one.
+    expect(text(markup)).toContain("Something else");
+  });
+
+  it("disables the submit until a chip is picked, and says why", () => {
+    // The affordance the text box never gave. `disabled` rather than a click
+    // that shows an error: a control that can do nothing should look like it.
+    const submit = markup.slice(markup.lastIndexOf("<button"));
+    expect(submit).toContain("disabled");
+    expect(text(markup)).toContain("Pick one to carry on.");
+  });
+
+  it("makes the selected chip readable without relying on colour", () => {
+    // Single-select, so every chip carries its state for a screen reader.
+    expect(markup.match(/aria-pressed="false"/g)).toHaveLength(BLOCK_CATEGORIES.length);
+  });
+
+  it("sends no user_text, because there is nothing left to type it into", () => {
+    const panel = readFileSync("src/components/coach/ExecutionBlockCoach.tsx", "utf8");
+    expect(panel).not.toContain("user_text");
+    const route = readFileSync("src/app/api/tasks/[id]/block/route.ts", "utf8");
+    const schema = route.slice(
+      route.indexOf("const BlockSchema"),
+      route.indexOf("export async function"),
+    );
+    expect(schema).not.toMatch(/user_text/);
+  });
+});
+
+describe("what the coach is told once the free text is gone", () => {
+  it("no longer asks the model to weigh text that cannot exist", () => {
+    expect(COACH_SYSTEM).not.toMatch(/what they typed|in their words|has told you/i);
+    expect(unwrapped(COACH_SYSTEM)).toContain("there is no free text");
+  });
+
+  /**
+   * The panel has two buttons and no field. A question back from the coach is
+   * a dead end — the user can only accept or decline it, and neither answers
+   * it. This is the prompt-side half of retiring "ask_user": the type is gone,
+   * and the instruction stops the same shape coming back in prose.
+   */
+  it("forbids asking a question the panel cannot take an answer to", () => {
+    expect(unwrapped(COACH_SYSTEM)).toContain("Never ask the user a question");
+  });
+
+  it("tells the model what to do when the barrier is Something else", () => {
+    const guidance = unwrapped(COACH_SYSTEM);
+    expect(guidance).toContain('If what got in the way was "Something else"');
+    // The rule that matters: an unknown barrier is not licence to invent one.
+    expect(guidance).toMatch(/must not invent|do not guess at a feeling/i);
+    expect(guidance).toContain("Work from the task instead");
+  });
+
+  it("builds a prompt that never references typed text", () => {
+    const prompt = coachPrompt({
+      taskTitle: "Finish module 4",
+      taskType: "deep_work",
+      estimatedMinutes: 90,
+      deadline: null,
+      goalTitle: "Pass the exam",
+      category: "something_else",
+      categoryLabel: "Something else",
+      externalParty: null,
+      allowedInterventions: INTERVENTIONS_FOR.something_else,
+      previouslyEffective: [],
+      productiveWindow: "morning",
+    });
+    expect(prompt).toContain("What got in the way: Something else");
+    expect(prompt).not.toMatch(/their words|they typed/i);
+    // The task is what is left to reason from, so it has to all be there.
+    expect(prompt).toContain("Finish module 4");
+    expect(prompt).toContain("deep_work");
+    expect(prompt).toContain("90 minutes");
+  });
+
+  // Offline, "Something else" used to come back as "What would the very first
+  // action be?" — a question under two buttons, neither of which answers it.
+  it("answers an unknown barrier with an action rather than a question", () => {
+    const intervention = fallbackIntervention("something_else", "Finish module 4", null);
+    expect(intervention.message).not.toContain("?");
+    expect(intervention.proposal.new_task_title).toContain("Finish module 4");
+    expect(INTERVENTIONS_FOR.something_else).toContain(intervention.intervention_type);
+  });
+});
+
+/**
+ * A panel that cannot take an answer must not be able to ask a question.
+ *
+ * "ask_user" invited a reply, and neither panel that shows an intervention has
+ * anywhere to put one: the coach offers "Let's do that" and "Not this time",
+ * and the "I'm stuck" panel offers an action, a split and a move. Leaving it on
+ * a single barrier only meant it fired eventually, so it is retired outright.
+ */
+describe("the intervention nobody could answer", () => {
+  it("is gone from the types the product can produce", () => {
+    expect(INTERVENTION_TYPES).not.toContain("ask_user");
+    expect(RETIRED_INTERVENTION_TYPES).toContain("ask_user");
+  });
+
+  it("is offered for no barrier at all, not merely for the vague one", () => {
+    for (const category of BLOCK_CATEGORIES) {
+      for (const retired of RETIRED_INTERVENTION_TYPES) {
+        expect(
+          INTERVENTIONS_FOR[category as BlockCategory] as readonly string[],
+          `${category} must not offer the retired ${retired}`,
+        ).not.toContain(retired);
+      }
+    }
+  });
+
+  it("cannot come back through the model either", () => {
+    // The schema is what the model's output is validated against, so a
+    // retired type is unreturnable rather than merely unasked-for.
+    const answer = {
+      intervention_type: "ask_user",
+      message: "What would the first step be?",
+      proposal: {
+        new_task_title: null,
+        new_task_minutes: null,
+        suggested_start: null,
+        revised_title: null,
+        follow_up_with: null,
+      },
+      reasoning: "",
+    };
+    expect(InterventionSchema.safeParse(answer).success).toBe(false);
+    expect(
+      InterventionSchema.safeParse({ ...answer, intervention_type: "shrink_first_step" }).success,
+    ).toBe(true);
+  });
+
+  it("never reappears as something that worked for this person before", () => {
+    // execution_blocks keeps every intervention ever offered, retired ones
+    // included, and §10 reads that history back into the prompt. A retired
+    // type surfacing there would recommend what nothing can choose.
+    const ranked = rankEffectiveInterventions({
+      effective_interventions: {
+        ask_user: { accepted: 5, offered: 5 },
+        shrink_first_step: { accepted: 2, offered: 4 },
+      },
+    });
+    expect(ranked).not.toContain("ask_user");
+    expect(ranked).toContain("shrink_first_step");
+  });
+
+  it("keeps the live list and the retired list disjoint", () => {
+    for (const retired of RETIRED_INTERVENTION_TYPES) {
+      expect(INTERVENTION_TYPES as readonly string[]).not.toContain(retired);
     }
   });
 });

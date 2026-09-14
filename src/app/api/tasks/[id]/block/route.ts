@@ -19,13 +19,15 @@ import { BLOCK_CHOICES } from "@/lib/app-copy";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const BlockSchema = z
-  .object({
-    category: z.enum(BLOCK_CATEGORIES),
-    user_text: z.string().max(2000).optional(),
-    check_in_id: z.string().uuid().optional(),
-  })
-  .strict();
+// No `user_text`. The panel's free-text box is gone (see ExecutionBlockCoach),
+// so nothing sends one and the parameter would be dead. Deliberately NOT
+// .strict(): a browser still holding the previous bundle keeps sending
+// user_text, and zod drops an unknown key silently — turning a stale tab into
+// a 400 would cost something and buy nothing, since the text isn't wanted.
+const BlockSchema = z.object({
+  category: z.enum(BLOCK_CATEGORIES),
+  check_in_id: z.string().uuid().optional(),
+});
 
 /**
  * Execution Block Coach, step 2 (PRD §13).
@@ -105,7 +107,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           goalTitle,
           category,
           categoryLabel: label,
-          userText: parsed.data.user_text ?? null,
           externalParty,
           allowedInterventions: allowed,
           previouslyEffective: rankEffectiveInterventions(profile ?? {}),
@@ -136,7 +137,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       task_id: id,
       check_in_id: parsed.data.check_in_id ?? null,
       category,
-      user_text: parsed.data.user_text ?? null,
+      // The column stays — rows written before the box was cut still carry
+      // what people typed, and dropping it would destroy that history.
+      user_text: null,
       intervention_type: intervention.intervention_type,
       recommendation: intervention.proposal,
       explanation: intervention.reasoning,

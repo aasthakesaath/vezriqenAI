@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { INTERVENTION_TYPES } from "./interventions";
 
 /**
  * Execution Profile (PRD §10).
@@ -149,12 +150,23 @@ export async function recomputeExecutionProfile(options: {
   return profile;
 }
 
-/** Interventions this person has accepted before, best first (§10, §13). */
+/**
+ * Interventions this person has accepted before, best first (§10, §13).
+ *
+ * Retired types are dropped on the way out. This is computed from
+ * execution_blocks, which keeps every intervention ever offered — including
+ * ones the product no longer has — so without the filter a retired type could
+ * still reach the prompt as "this has worked for them before", recommending
+ * something the model is not allowed to choose and could not return anyway.
+ * The row stays; only the recommendation goes.
+ */
 export function rankEffectiveInterventions(profile: {
   effective_interventions?: Record<string, { accepted: number; offered: number }> | null;
 }): string[] {
+  const live = INTERVENTION_TYPES as readonly string[];
   const entries = Object.entries(profile.effective_interventions ?? {});
   return entries
+    .filter(([type]) => live.includes(type))
     .filter(([, stats]) => stats.offered > 0 && stats.accepted > 0)
     .sort((a, b) => b[1].accepted / b[1].offered - a[1].accepted / a[1].offered)
     .slice(0, 3)
