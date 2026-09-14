@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import TodayGoalSections, {
-  type TodaySectionView,
-} from "@/components/app/TodayGoalSections";
+import TodayTasks, { type TodayTaskView } from "@/components/app/TodayTasks";
 import GoalsScreen from "@/components/app/GoalsScreen";
 import { goalLabel, goalStatement } from "@/lib/goal-label";
 
@@ -27,25 +25,20 @@ function shingles(sentence: string): string[] {
   return words.slice(0, -2).map((_, i) => words.slice(i, i + 3).join(" "));
 }
 
-function section(overrides: Partial<TodaySectionView> = {}): TodaySectionView {
+function card(overrides: Partial<TodayTaskView> = {}): TodayTaskView {
   return {
+    id: "t1",
+    title: "Ask the first host organization",
+    reason: "Someone else has to act before this can close.",
+    badge: "5 days overdue",
+    urgency: "overdue",
+    dateLabel: "Due 4 Sept",
+    estimatedMinutes: 30,
+    milestoneTitle: null,
+    reminderId: null,
     goalId: "g1",
     goalLabel: "Build Calyqen",
     icon: "briefcase",
-    summary: "2 overdue · 3 due today",
-    tasks: [
-      {
-        id: "t1",
-        title: "Ask the first host organization",
-        reason: "Someone else has to act before this can close.",
-        badge: "5 days overdue",
-        urgency: "overdue",
-        dateLabel: "Due 4 Sept",
-        estimatedMinutes: 30,
-        milestoneTitle: null,
-        reminderId: null,
-      },
-    ],
     ...overrides,
   };
 }
@@ -96,7 +89,7 @@ describe("a goal name is a name, never the SMART statement", () => {
   });
 
   it("puts no part of the statement on Today", () => {
-    const markup = html(<TodayGoalSections sections={[section()]} />);
+    const markup = html(<TodayTasks tasks={[card()]} />);
     for (const run of shingles(STATEMENT)) expect(text(markup), run).not.toContain(run);
   });
 
@@ -144,7 +137,7 @@ describe("a goal name is a name, never the SMART statement", () => {
   it("does not cut a name with CSS either", () => {
     // `truncate` is text-overflow: ellipsis, which cuts mid-word — the second
     // half of how "turn Caly…" reached the screen. A short name wraps.
-    const markup = html(<TodayGoalSections sections={[section()]} />);
+    const markup = html(<TodayTasks tasks={[card()]} />);
     const header = markup.slice(0, markup.indexOf("Build Calyqen"));
     expect(header).not.toContain("truncate");
   });
@@ -201,8 +194,10 @@ describe("nothing is pulled into the box above it", () => {
  * ------------------------------------------------------------------------- */
 describe("no ancestor can clamp the Execution Block Coach", () => {
   const sources = [
-    "src/components/app/TodayGoalSections.tsx",
+    "src/components/app/TodayTasks.tsx",
     "src/components/goal/GoalTaskList.tsx",
+    "src/components/coach/StuckPanel.tsx",
+    "src/components/coach/TaskGuidance.tsx",
   ];
 
   it("clips nothing on the path from the card to the coach", () => {
@@ -229,7 +224,7 @@ describe("no ancestor can clamp the Execution Block Coach", () => {
   });
 
   it("keeps the rounded corners it gave up overflow-hidden for", () => {
-    const closed = html(<TodayGoalSections sections={[section()]} />);
+    const closed = html(<TodayTasks tasks={[card()]} />);
     expect(closed).toContain("rounded-2xl");
   });
 });

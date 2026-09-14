@@ -1,5 +1,6 @@
 import Link from "next/link";
-import TodayGoalSections, { type TodaySectionView } from "./TodayGoalSections";
+import StartFromToday from "./StartFromToday";
+import TodayTasks, { type TodayTaskView } from "./TodayTasks";
 import VezriNote from "./VezriNote";
 import { APP_ROUTES } from "@/lib/routes";
 
@@ -9,6 +10,14 @@ import { APP_ROUTES } from "@/lib/routes";
  * Split out from the route so the screen can be rendered — and put through
  * axe at 375px and 1440px — without a signed-in session. The page above stays
  * what it should be: a query and a mapping.
+ *
+ * WHAT CHANGED, AND WHY IT IS SMALLER. This screen used to open with
+ * "{n} things are past the date Vezri worked back to" and then draw one
+ * collapsible section per goal, three rows in each. With four goals that is
+ * twelve rows under a headline count of thirty-three, which is a backlog with
+ * a scoreboard on it — the two things §4.5 and §4.6 each rule out on their
+ * own. The count is gone entirely, the day is three cards, and everything else
+ * is on /goals, which already lists it properly.
  */
 
 export type WaitingOnView = {
@@ -19,14 +28,16 @@ export type WaitingOnView = {
   goalLabel: string;
 };
 
+/** §13 rows are informational; the page stays small at three of them too. */
+const WAITING_ON_LIMIT = 3;
+
 export default function TodayScreen({
   dateLabel,
   greeting,
   firstName,
   hasGoals,
-  behindCount,
   planBehind,
-  sections,
+  tasks,
   waitingOn,
 }: {
   dateLabel: string;
@@ -34,9 +45,14 @@ export default function TodayScreen({
   greeting: string;
   firstName: string | null;
   hasGoals: boolean;
-  behindCount: number;
+  /**
+   * True when at least one open task's own date has passed. A BOOLEAN, not a
+   * count: the number is what made this a wall, and nothing on the screen
+   * needs to know it. It only decides whether the one line and the one button
+   * are drawn.
+   */
   planBehind: boolean;
-  sections: TodaySectionView[];
+  tasks: TodayTaskView[];
   waitingOn: WaitingOnView[];
 }) {
   return (
@@ -77,18 +93,10 @@ export default function TodayScreen({
         </div>
       ) : (
         <>
-          {/* §4.6 — said ONCE, here, rather than on every row. Three rows each
-              repeating "this should already have started" is the same reproach
-              three times over, which is how a screen full of overdue work ends
-              up reading as a telling-off. Neutral wording, no exclamation. */}
-          {planBehind && (
-            <p className="mt-6 rounded-2xl border border-blush bg-blush-light px-5 py-4 text-[0.98rem] leading-relaxed text-ink">
-              {behindCount} things are past the date Vezri worked back to. That happens — these are
-              the ones worth picking up first.
-            </p>
-          )}
+          {/* One line, one button, no number. See StartFromToday. */}
+          {planBehind && <StartFromToday />}
 
-          <TodayGoalSections sections={sections} />
+          <TodayTasks tasks={tasks} />
 
           {/* §13 — work that isn't in the user's control, kept visible but out
               of the priority slots. */}
@@ -98,7 +106,7 @@ export default function TodayScreen({
                 Waiting on someone else
               </h2>
               <ul className="mt-3 space-y-2">
-                {waitingOn.map((task) => (
+                {waitingOn.slice(0, WAITING_ON_LIMIT).map((task) => (
                   <li key={task.id} className="rounded-xl border border-blush bg-white px-5 py-4">
                     <p className="font-medium text-ink">{task.title}</p>
                     {task.waitingOn && (
@@ -113,6 +121,9 @@ export default function TodayScreen({
             </section>
           )}
 
+          {/* Where the rest of the work is. Not an apology for hiding it —
+              /goals lists every goal with its own full plan, and it is the
+              screen built for reading a backlog. */}
           <p className="mt-10">
             <Link href={APP_ROUTES.goals} className="btn-secondary">
               See all your goals

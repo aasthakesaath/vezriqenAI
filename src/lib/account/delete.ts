@@ -51,6 +51,11 @@ export const DELETION_ORDER = [
   "check_ins",
   "reminders",
   "task_dependencies",
+  // Cascades from tasks, and swept explicitly anyway: it is also the one
+  // table an authenticated session cannot delete from itself (0013 gives it a
+  // read policy and no other), so the promise on /privacy depends on this
+  // list rather than on a policy the user could exercise.
+  "task_guidance",
   "tasks",
   "milestones",
   "goal_audits",

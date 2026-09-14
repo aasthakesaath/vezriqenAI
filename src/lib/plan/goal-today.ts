@@ -30,6 +30,19 @@ import { daysBetween, toDayKey, type DayKey } from "@/lib/time-zone";
 /** §4.5 — how many rows are visible before the user asks for more. */
 export const VISIBLE_TASKS = 3;
 
+/**
+ * §4.5 — how many cards the cross-goal Today screen shows IN TOTAL.
+ *
+ * Same number, different set, and worth its own name: VISIBLE_TASKS is a
+ * per-goal rendering cap with "show the rest" behind it, and this one is the
+ * whole page with no more behind it at all. Here rather than beside the
+ * component because /today is a server component and cannot import a value
+ * from a "use client" module — it arrives undefined at runtime, which is a
+ * production crash this codebase has already had once (see
+ * tests/server-client-boundary.test.ts).
+ */
+export const TODAY_TASK_LIMIT = 3;
+
 /** Statuses that still want doing. Same set the rest of the planner uses. */
 const OPEN = new Set<string>(OPEN_TASK_STATUSES);
 
@@ -308,4 +321,46 @@ export function selectTodayByGoal(candidates: CrossGoalTask[], today: DayKey): T
       b.counts.overdue - a.counts.overdue ||
       b.tasks.length - a.tasks.length,
   );
+}
+
+/** One task, with the goal it belongs to still attached. */
+export type CrossGoalCard = GoalTodayTask & { goalId: string; goalLabel: string | null };
+
+/**
+ * The whole day, as a short flat list.
+ *
+ * /today used to draw one collapsible section per goal with three rows in
+ * each, which meant the cap applied per goal and not to the page: four goals
+ * put twelve rows on screen under a line counting thirty-three things as past
+ * their date. §4.5 caps the DAY at three priority actions, so the cap belongs
+ * here, once, across everything.
+ *
+ * Spread before depth. Every goal gets its first card before any goal gets a
+ * second, because three cards from one goal would let a second goal drift
+ * entirely unseen — the thing §18 and §15 both care about, and the same rule
+ * selectTodayCards has always applied. Only when there are fewer goals than
+ * slots does a goal get a second card.
+ *
+ * Sections stay the input rather than the output: they carry the per-goal
+ * ordering selectGoalToday already worked out, and reading them in order is
+ * what makes the first card the most pressing thing on the screen.
+ */
+export function selectTopToday(sections: TodayGoalSection[], limit = VISIBLE_TASKS): CrossGoalCard[] {
+  const chosen: CrossGoalCard[] = [];
+
+  // Round-robin over the sections, which are already in priority order. Round
+  // 0 takes each goal's first card, round 1 its second, and so on.
+  for (let round = 0; chosen.length < limit; round += 1) {
+    const anyLeft = sections.some((section) => section.tasks.length > round);
+    if (!anyLeft) break;
+
+    for (const section of sections) {
+      if (chosen.length >= limit) break;
+      const task = section.tasks[round];
+      if (!task) continue;
+      chosen.push({ ...task, goalId: section.goalId, goalLabel: section.goalLabel });
+    }
+  }
+
+  return chosen;
 }

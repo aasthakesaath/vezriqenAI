@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
-import TodayGoalSections, {
-  type TodaySectionView,
-  type TodayTaskView,
-} from "@/components/app/TodayGoalSections";
+import TodayTasks, { type TodayTaskView } from "@/components/app/TodayTasks";
+import {
+  TODAY_TASK_LIMIT,
+  selectTopToday,
+  type TodayGoalSection,
+} from "@/lib/plan/goal-today";
 import TaskActions from "@/components/app/TaskActions";
 import ProgressRing from "@/components/app/ProgressRing";
 import Icon from "@/components/icons/Icon";
@@ -38,49 +40,120 @@ function row(index: number, overrides: Partial<TodayTaskView> = {}): TodayTaskVi
     estimatedMinutes: 30,
     milestoneTitle: "Independent validation",
     reminderId: null,
+    goalId: "g1",
+    goalLabel: "Goal g1",
+    icon: "trophy",
     ...overrides,
   };
 }
 
-function section(id: string, taskCount: number): TodaySectionView {
+const cards = (count: number, overrides: Partial<TodayTaskView> = {}) =>
+  Array.from({ length: count }, (_, i) => row(i, overrides));
+
+/** A goal's worth of eligible work, as selectTodayByGoal returns it. */
+function section(id: string, taskCount: number): TodayGoalSection {
+  const tasks = Array.from({ length: taskCount }, (_, i) => ({
+    id: `${id}-${i}`,
+    title: `Task ${id}${i}`,
+    rationale: null,
+    taskType: "simple_action",
+    status: "not_started",
+    priority: 3,
+    deadline: null,
+    startBy: null,
+    estimatedMinutes: null,
+    milestoneTitle: null,
+    waitingOn: null,
+    reason: "Because it is the next thing that moves this forward.",
+    // Descending, so the first task of a section is its most pressing one.
+    rank: 100 - i,
+    urgency: {
+      kind: "overdue" as const,
+      label: "30 days overdue",
+      dateLabel: "Due 10 Aug 2025",
+      daysLate: 30,
+    },
+  }));
   return {
     goalId: id,
     goalLabel: `Goal ${id}`,
-    icon: "trophy",
-    summary: "2 overdue · 3 due today",
-    tasks: Array.from({ length: taskCount }, (_, i) => row(i)),
+    goalTitle: `Goal ${id}`,
+    tasks,
+    counts: { overdue: taskCount, dueToday: 0, startNow: 0 },
+    summary: `${taskCount} overdue`,
   };
 }
 
-describe("§4.5 — three important things, applied inside each goal", () => {
+describe("§4.5 — three important things, applied to the PAGE", () => {
   /**
-   * The mockup shows five rows plus "Show 5 more", which is ten rows on one
-   * screen. §4 exists to keep this simpler than a task manager and §4.5 caps
-   * the day at three priority actions; grouping by goal changes which SET the
-   * cap applies to, not the cap.
+   * The cap used to be applied per goal SECTION: three rows in each, and as
+   * many sections as the person had goals. Four goals meant twelve rows on one
+   * screen under a line reading "33 things are past the date Vezri worked back
+   * to", which is a backlog with a scoreboard on it — the thing §4.5 and §4.6
+   * each rule out on their own.
+   *
+   * So the cap moved to the page, and it is enforced in selectTopToday rather
+   * than by the renderer: a component that has to remember to slice is a
+   * component that will one day forget.
    */
-  it("shows three rows and says how many are behind the control", () => {
-    const markup = html(<TodayGoalSections sections={[section("g1", 7)]} />);
-    expect(count(markup, /Task \d/)).toBe(3);
-    expect(text(markup)).toContain("Show 4 more");
-    expect(text(markup)).not.toContain("Task 3");
-  });
-
-  it("offers no control when three or fewer need attention", () => {
-    const markup = html(<TodayGoalSections sections={[section("g1", 3)]} />);
-    expect(count(markup, /Task \d/)).toBe(3);
-    expect(text(markup)).not.toContain("more");
-  });
-
-  it("never renders a backlog, however many goals there are", () => {
+  it("never returns more than three, however many goals there are", () => {
     const many = ["a", "b", "c", "d", "e"].map((id) => section(id, 12));
-    const markup = html(<TodayGoalSections sections={many} />);
-    // Three per section and no more, whether the section is open or closed —
-    // 60 eligible tasks across five goals put 15 rows in the document, of
-    // which one section's worth is on screen.
-    expect(count(markup, /Task \d/)).toBe(3 * many.length);
-    expect(text(markup)).not.toContain("Task 3");
-    expect(count(markup, "Show 9 more")).toBe(many.length);
+    expect(selectTopToday(many, TODAY_TASK_LIMIT)).toHaveLength(3);
+  });
+
+  // The rule that made the per-goal version defensible, kept: a second goal
+  // with work past its date must not be crowded out by one goal's backlog.
+  it("gives every goal its first card before any goal gets a second", () => {
+    const chosen = selectTopToday(["a", "b", "c"].map((id) => section(id, 5)), 3);
+    expect(chosen.map((task) => task.goalId)).toEqual(["a", "b", "c"]);
+  });
+
+  it("only doubles up on a goal once every other goal has had a turn", () => {
+    const chosen = selectTopToday([section("a", 5), section("b", 1)], 3);
+    expect(chosen.map((task) => task.goalId)).toEqual(["a", "b", "a"]);
+    // And the second card from goal a is its SECOND task, not its first again.
+    expect(chosen[2]!.id).toBe("a-1");
+  });
+
+  it("returns everything there is when that is fewer than three", () => {
+    expect(selectTopToday([section("a", 2)], 3)).toHaveLength(2);
+    expect(selectTopToday([], 3)).toHaveLength(0);
+  });
+
+  it("draws exactly what it is given, and offers no way to unfold more", () => {
+    const markup = html(<TodayTasks tasks={cards(3)} />);
+    expect(count(markup, /Task \d/)).toBe(3);
+    // "Show 9 more" was the control that turned three rows into twelve. The
+    // rest of the plan is on /goals, which is built for reading a backlog.
+    expect(text(markup)).not.toContain("Show");
+    expect(text(markup)).toContain("Open Goal g1");
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * §13 "didn't know how to start" — answered before the work is missed.
+ *
+ * A card offered Done, Not done and I'm stuck and never once said HOW. The
+ * barrier was already one of the eight the coach asks about, so the product
+ * knew this was real and still only answered it after the fact.
+ * ------------------------------------------------------------------------- */
+describe("a task card expands into the steps", () => {
+  const markup = html(<TodayTasks tasks={cards(1)} />);
+
+  it("puts the question on every card", () => {
+    expect(text(markup)).toContain("How do I do this?");
+  });
+
+  it("uses the accordion pattern the rest of the product uses", () => {
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain('aria-controls="today-task-task-0"');
+    expect(markup).toContain('id="today-task-task-0" hidden=""');
+  });
+
+  it("does not pay for the model call until it is opened", () => {
+    // The panel is mounted only when open, and mounting TaskGuidance is what
+    // fires POST /api/tasks/[id]/guidance. A closed card must cost nothing.
+    expect(text(markup)).not.toContain("Working out the steps");
   });
 });
 
@@ -92,7 +165,7 @@ describe("§13 — every row can reach the Execution Block Coach", () => {
    * differentiator rather than tidied a button away.
    */
   it("gives every visible row both routes into the coach", () => {
-    const markup = html(<TodayGoalSections sections={[section("g1", 3)]} />);
+    const markup = html(<TodayTasks tasks={cards(3)} />);
     expect(count(markup, "Not done")).toBe(3);
     expect(count(markup, "I’m stuck")).toBe(3);
   });
@@ -148,44 +221,43 @@ describe("§12 — the response set reports what actually happened", () => {
   });
 });
 
-describe("a collapsed section still says what is inside it", () => {
-  const sections = [section("g1", 2), section("g2", 2), section("g3", 2)];
-  const markup = html(<TodayGoalSections sections={sections} />);
+describe("every card says which goal it belongs to", () => {
+  /**
+   * The goal used to be a section header and the cards sat under it. With the
+   * sections gone the name has to be ON the card, or three cards from three
+   * goals read as one undifferentiated list — which is how work from a goal
+   * someone had stopped thinking about looks identical to work from the one
+   * they came here for.
+   */
+  const markup = html(
+    <TodayTasks
+      tasks={[
+        row(0, { goalId: "g1", goalLabel: "Build Calyqen" }),
+        row(1, { goalId: "g2", goalLabel: "Run a half marathon" }),
+      ]}
+    />,
+  );
 
-  it("opens the first and closes the rest, as drawn", () => {
-    expect(markup).toMatch(/id="today-section-g1"(?! hidden)/);
-    expect(markup).toContain('id="today-section-g2" hidden=""');
-    expect(markup).toContain('id="today-section-g3" hidden=""');
+  it("names the goal on each card", () => {
+    expect(text(markup)).toContain("Build Calyqen");
+    expect(text(markup)).toContain("Run a half marathon");
   });
 
-  it("puts the count on the header, so closing tidies rather than hides", () => {
-    // Twice per section: the desktop pill and the line that replaces it below
-    // 640px, where the pill would squeeze the goal name to nothing.
-    expect(count(markup, "2 overdue · 3 due today")).toBe(sections.length * 2);
+  it("links each card to the goal it came from", () => {
+    expect(markup).toContain('href="/goals/g1"');
+    expect(markup).toContain('href="/goals/g2"');
   });
 
-  it("marks every header with the state it is in", () => {
-    expect(count(markup, 'aria-expanded="true"')).toBe(1);
-    expect(count(markup, 'aria-controls="today-section-g2"')).toBeGreaterThan(0);
-  });
-
-  it("keeps the panel in the document rather than unmounting it", () => {
-    // `hidden`, not removed: in-page find still reaches the text and a screen
-    // reader's cursor is not surprised by content appearing from nowhere.
-    expect(markup).toContain('hidden=""');
+  it("wraps the name rather than cutting it", () => {
+    // `truncate` is text-overflow: ellipsis, which cuts mid-word. It is half
+    // of how "By Dec 31, 2026, turn Caly…" reached this screen.
+    expect(markup).not.toContain("truncate");
   });
 });
 
 describe("§4.6 — overdue is stated, not scolded", () => {
   const markup = html(
-    <TodayGoalSections
-      sections={[
-        {
-          ...section("g1", 1),
-          tasks: [row(0, { badge: "30 days overdue", dateLabel: "Due 10 Aug 2025" })],
-        },
-      ]}
-    />,
+    <TodayTasks tasks={[row(0, { badge: "30 days overdue", dateLabel: "Due 10 Aug 2025" })]} />,
   );
 
   it("says the fact in words, so the status is not colour alone", () => {
@@ -195,7 +267,7 @@ describe("§4.6 — overdue is stated, not scolded", () => {
   it("does not put an alarm glyph on the row", () => {
     // The mockup's overdue marker is a saturated red disc with an exclamation
     // mark. The disc stays; the exclamation does not.
-    const rowMarkup = markup.slice(markup.indexOf("<li"));
+    const rowMarkup = markup.slice(markup.indexOf("<article"));
     expect(rowMarkup).not.toContain("!");
     expect(rowMarkup).not.toContain("⚠");
   });
@@ -212,7 +284,7 @@ describe("§4.6 — overdue is stated, not scolded", () => {
 
 describe("the empty state is not a failure state", () => {
   it("says being caught up is a good place to be", () => {
-    const markup = html(<TodayGoalSections sections={[]} />);
+    const markup = html(<TodayTasks tasks={[]} />);
     expect(text(markup)).toContain("Nothing needs you today");
   });
 });
@@ -262,7 +334,8 @@ describe("goal icons are one drawn set", () => {
     for (const file of [
       "src/components/icons/Icon.tsx",
       "src/lib/goal-icon.ts",
-      "src/components/app/TodayGoalSections.tsx",
+      "src/components/app/TodayTasks.tsx",
+      "src/components/app/StartFromToday.tsx",
       "src/components/app/TodayScreen.tsx",
       "src/components/app/GoalsScreen.tsx",
       "src/app/(app)/today/page.tsx",

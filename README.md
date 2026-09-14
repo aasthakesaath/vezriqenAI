@@ -109,8 +109,10 @@ The Google OAuth client id and secret live in the **Supabase dashboard**
 URI, and Supabase needs `https://www.vezriqen.com/api/auth/google/callback`
 under Authentication → URL Configuration → Redirect URLs.
 
-Apply `supabase/migrations/0001…0004` in order, then run
+Apply `supabase/migrations/0001…0013` in order, then run
 `supabase/verify_security.sql` and `supabase/verify_rls_cross_user.sql`.
+`supabase/pending/` carries the same SQL annotated for a database that is
+already live, with the before/after counts each clean-up should report.
 
 ### AI
 
