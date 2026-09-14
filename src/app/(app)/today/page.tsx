@@ -124,6 +124,7 @@ export default async function TodayPage() {
         title: task.title,
         waitingOn: task.externalPartyName ?? null,
         goalLabel: goalLabel({ short_label: task.goalLabel }),
+        estimatedMinutes: task.estimatedMinutes,
       }))}
     />
   );

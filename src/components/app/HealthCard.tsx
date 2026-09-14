@@ -67,7 +67,7 @@ export default function HealthCard({
   const silentList = (
     <ul className="mt-2 space-y-1.5 text-sm text-mauve">
       {silent.map((factor) => (
-        <li key={factor.id} className="flex flex-wrap gap-x-1.5">
+        <li key={factor.id} className="flex flex-wrap gap-x-1.5 gap-y-0.5">
           <span className="text-ink">{factor.label}:</span>
           <span className="min-w-0">{factor.absent}</span>
         </li>

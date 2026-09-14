@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
-import { SUPABASE_CONFIGURED } from "@/lib/env";
+import { requireUser } from "@/lib/api/auth";
 import { recomputeExecutionProfile } from "@/lib/coach/profile";
 
 export const runtime = "nodejs";
@@ -25,16 +24,11 @@ type Proposal = {
  * this person actually takes up, not just from what Vezri offered.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  if (!SUPABASE_CONFIGURED) {
-    return NextResponse.json({ error: "Not configured." }, { status: 503 });
-  }
+  const auth = await requireUser("blocks/[id]/respond");
+  if (!auth.ok) return auth.response;
+  const { supabase, user } = auth;
 
   const { id } = await context.params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
   const parsed = RespondSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid response." }, { status: 400 });

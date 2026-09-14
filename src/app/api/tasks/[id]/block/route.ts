@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/api/auth";
 import { getAIProvider, AIExtractionError } from "@/lib/ai";
-import { AI_CONFIGURED, SUPABASE_CONFIGURED } from "@/lib/env";
+import { AI_CONFIGURED } from "@/lib/env";
 import {
   BLOCK_CATEGORIES,
   COACH_SYSTEM,
@@ -34,16 +34,11 @@ const BlockSchema = z
  * point is that the task must not be silently rescheduled.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  if (!SUPABASE_CONFIGURED) {
-    return NextResponse.json({ error: "Not configured." }, { status: 503 });
-  }
+  const auth = await requireUser("tasks/[id]/block");
+  if (!auth.ok) return auth.response;
+  const { supabase, user } = auth;
 
   const { id } = await context.params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
   const parsed = BlockSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

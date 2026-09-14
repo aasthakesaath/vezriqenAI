@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, type Authenticated } from "@/lib/api/auth";
 import { getAIProvider, AIExtractionError } from "@/lib/ai";
-import { AI_CONFIGURED, SUPABASE_CONFIGURED } from "@/lib/env";
+import { AI_CONFIGURED } from "@/lib/env";
 import { BLOCK_CATEGORIES, type BlockCategory } from "@/lib/coach/interventions";
 import {
   UNBLOCK_SYSTEM,
@@ -60,16 +60,11 @@ const Body = z.discriminatedUnion("action", [
 ]);
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  if (!SUPABASE_CONFIGURED) {
-    return NextResponse.json({ error: "Not configured." }, { status: 503 });
-  }
+  const auth = await requireUser("tasks/[id]/stuck");
+  if (!auth.ok) return auth.response;
+  const { supabase, user } = auth;
 
   const { id } = await context.params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -118,7 +113,8 @@ type TaskRow = {
   task_dependencies: unknown;
 };
 
-type Client = Awaited<ReturnType<typeof createClient>>;
+/** The caller's client, as requireUser hands it back. */
+type Client = Authenticated["supabase"];
 
 function firstOf<T>(join: unknown): T | null {
   if (Array.isArray(join)) return (join[0] as T) ?? null;

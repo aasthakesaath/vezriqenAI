@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { SUPABASE_CONFIGURED } from "@/lib/env";
+import { requireUser } from "@/lib/api/auth";
 import { loadUserSettings } from "@/lib/user-settings";
 import { dayKeyIn } from "@/lib/time-zone";
 import { OPEN_TASK_STATUSES } from "@/lib/plan/task-status";
@@ -34,15 +33,9 @@ export const runtime = "nodejs";
  * work with no date at all is not given one.
  */
 export async function POST() {
-  if (!SUPABASE_CONFIGURED) {
-    return NextResponse.json({ error: "Not configured." }, { status: 503 });
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
+  const auth = await requireUser("tasks/start-from-today");
+  if (!auth.ok) return auth.response;
+  const { supabase, user } = auth;
 
   const { timeZone } = await loadUserSettings(supabase);
   const today = dayKeyIn(new Date(), timeZone);
