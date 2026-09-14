@@ -3,6 +3,11 @@ import { z } from "zod";
 import { requireUser, type Authenticated } from "@/lib/api/auth";
 import { loadOwnTask, waitingOnName } from "@/lib/api/task-access";
 import { getAIProvider, AIExtractionError } from "@/lib/ai";
+import {
+  aiFailureMessage,
+  aiFailureStatus,
+  isRetryableFailure,
+} from "@/lib/ai/failure-copy";
 import { AI_CONFIGURED } from "@/lib/env";
 import { BLOCK_CATEGORIES, type BlockCategory } from "@/lib/coach/interventions";
 import {
@@ -183,10 +188,18 @@ async function analyse(options: {
     modelVersion = result.modelVersion;
   } catch (error) {
     if (!(error instanceof AIExtractionError)) throw error;
-    // A bad response is an inline retry, never a crash and never a panel that
-    // closes with nothing in it. lib/ai has already written the message for a
-    // human; `retryable` is what puts the button on it.
-    return NextResponse.json({ error: error.message, retryable: true }, { status: 502 });
+    // Worded for THIS panel, from the kind. A billing failure used to arrive
+    // here as "Vezri couldn't work with that plan. Try a clearer version" —
+    // there is no plan on this screen, and no edit fixes an unpaid balance.
+    // `retryable` follows the kind too: a button that cannot succeed is worse
+    // than none.
+    return NextResponse.json(
+      {
+        error: aiFailureMessage("unblock", error.kind),
+        retryable: isRetryableFailure(error.kind),
+      },
+      { status: aiFailureStatus(error.kind) },
+    );
   }
 
   const { data: block, error } = await supabase

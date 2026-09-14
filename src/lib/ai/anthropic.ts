@@ -14,53 +14,120 @@ import {
 } from "./provider";
 
 /**
- * Turns a provider failure into something the user can act on, and logs the
- * real cause where only the server can see it.
+ * Classifies a provider failure. It does NOT write the sentence the user sees.
  *
- * The generic "couldn't reach the service" hid a production 401 for hours: an
- * expired key, a rate limit, a timeout and a genuine outage all read
- * identically, and the four need different responses. The status code is on
- * the SDK's error; nothing about it is secret from the server log, and nothing
- * about it belongs in the browser.
+ * It used to. That is how a billing failure came to say "Vezri couldn't work
+ * with that plan. Try a clearer version, or paste the plan text" on the "I'm
+ * stuck" panel: the copy was written when extraction was the only caller, and
+ * every surface added since inherited it. The provider cannot know which
+ * screen is asking, so it reports a KIND and lib/ai/failure-copy chooses the
+ * words. The `message` set here is a fallback for anything that renders an
+ * AIServiceError without consulting that table.
+ *
+ * THE ERROR TYPE IS READ BEFORE THE STATUS. Every Anthropic SDK error exposes
+ * `.type` — "billing_error", "rate_limit_error", "overloaded_error" — and the
+ * API reference is explicit that this is how to classify, rather than by
+ * status code. Status is the fallback for a transport error that never got a
+ * typed body.
  */
 function classify(error: unknown, action: string): AIServiceError {
-  const e = error as { status?: number; name?: string; message?: string };
+  const e = error as { status?: number; name?: string; message?: string; type?: string };
   const status = typeof e?.status === "number" ? e.status : null;
   const name = e?.name ?? "";
+  const type = typeof e?.type === "string" ? e.type : null;
+  const detail = e?.message ?? "";
 
-  let kind: AIFailureKind = "unavailable";
-  let message =
-    "Vezri couldn't reach the service that reads plans. Please try again in a moment.";
-
-  if (status === 401 || status === 403) {
-    kind = "unauthorised";
-    // Not the user's fault and not something a retry fixes, so do not invite one.
-    message =
-      "Vezri isn't able to read plans right now — this needs a fix on our side, not another try.";
-  } else if (status === 429) {
-    kind = "rate_limited";
-    message = "Vezri is handling a lot at the moment. Try again in a minute.";
-  } else if (status === 400 || status === 422) {
-    kind = "bad_request";
-    message =
-      "Vezri couldn't work with that plan. Try a clearer version, or paste the plan text.";
-  } else if (
-    name.includes("Timeout") ||
-    name === "APIConnectionTimeoutError" ||
-    /timeout|timed out|aborted/i.test(e?.message ?? "")
-  ) {
-    kind = "timed_out";
-    message = "That took longer than Vezri could wait. Try again — large plans can need a second run.";
-  }
+  const kind = classifyKind({ type, status, name, detail });
 
   console.error(
-    `[ai] ${action} failed: kind=${kind} status=${status ?? "none"} name=${name || "unknown"} :: ${
-      e?.message ?? String(error)
-    }`,
+    `[ai] ${action} failed: kind=${kind} type=${type ?? "none"} status=${status ?? "none"} ` +
+      `name=${name || "unknown"} :: ${detail || String(error)}`,
   );
 
-  return new AIServiceError(message, kind, status, error);
+  return new AIServiceError(FALLBACK_MESSAGE[kind] ?? FALLBACK_MESSAGE.unavailable, kind, status, error);
 }
+
+/**
+ * A 400 that is really a billing problem.
+ *
+ * The canonical billing failure is 402 `billing_error` and is caught by type
+ * above. This is the other shape it arrives in: an `invalid_request_error`
+ * whose message is about the credit balance rather than about the request. It
+ * is checked only inside the 400 branch, so it cannot swallow a rate limit,
+ * and it exists because getting this one wrong is what told a user to rewrite
+ * input that was never read.
+ */
+const BILLING_IN_A_400 = /credit balance|insufficient (?:credit|funds)|billing|payment required|purchase (?:more )?credits/i;
+
+function classifyKind(signal: {
+  type: string | null;
+  status: number | null;
+  name: string;
+  detail: string;
+}): AIFailureKind {
+  const { type, status, name, detail } = signal;
+
+  // ---- By error type, which is what the API documents for this. ----------
+  switch (type) {
+    case "billing_error":
+      return "billing";
+    case "authentication_error":
+    case "permission_error":
+      return "unauthorised";
+    case "not_found_error":
+      return "not_found";
+    case "rate_limit_error":
+      return "rate_limited";
+    case "overloaded_error":
+      return "overloaded";
+    case "request_too_large":
+      return "too_large";
+    case "api_error":
+      return "unavailable";
+    case "invalid_request_error":
+      return BILLING_IN_A_400.test(detail) ? "billing" : "bad_request";
+  }
+
+  // ---- By status, for a failure that carried no typed body. --------------
+  if (status === 401 || status === 403) return "unauthorised";
+  if (status === 402) return "billing";
+  if (status === 404) return "not_found";
+  if (status === 413) return "too_large";
+  if (status === 429) return "rate_limited";
+  if (status === 529) return "overloaded";
+  if (status === 400 || status === 422) {
+    return BILLING_IN_A_400.test(detail) ? "billing" : "bad_request";
+  }
+  if (status !== null && status >= 500) return "unavailable";
+
+  if (
+    name.includes("Timeout") ||
+    name === "APIConnectionTimeoutError" ||
+    /timeout|timed out|aborted/i.test(detail)
+  ) {
+    return "timed_out";
+  }
+
+  return "unavailable";
+}
+
+/**
+ * Used only when something renders an AIServiceError without going through
+ * lib/ai/failure-copy. Deliberately surface-neutral: not one of these
+ * mentions a plan, a document, or anything the reader might try to edit.
+ */
+const FALLBACK_MESSAGE: Record<string, string> = {
+  not_configured: "Vezri's AI service isn't switched on yet.",
+  unauthorised: "Vezri can't get into its AI service right now.",
+  billing: "Vezri's AI service is unavailable right now — a billing problem on our side.",
+  not_found: "Vezri asked its AI service for something it no longer offers.",
+  rate_limited: "Vezri is handling a lot at the moment. Try again in a minute.",
+  overloaded: "Vezri's AI service is busy right now. Try again in a moment.",
+  timed_out: "That took longer than Vezri could wait.",
+  too_large: "That was larger than Vezri could take in one go.",
+  bad_request: "Vezri couldn't work with what it was given.",
+  unavailable: "Vezri couldn't reach its AI service. Try again in a moment.",
+};
 
 /**
  * Anthropic implementation of the provider abstraction.
@@ -155,8 +222,13 @@ export class AnthropicProvider implements AIProvider {
 
       // A refusal is a 200 with no usable output — check before reading content.
       if (response.stop_reason === "refusal") {
+        // About what we sent, so `bad_request` — and the sentence comes from
+        // the surface, which knows whether "what we sent" was a document the
+        // user uploaded or a task title we assembled ourselves.
         throw new AIExtractionError(
-          "Vezri could not process that document. If it contains sensitive personal data, try uploading just the plan section.",
+          "Vezri couldn't work with what it was given.",
+          undefined,
+          "bad_request",
         );
       }
 
@@ -165,7 +237,9 @@ export class AnthropicProvider implements AIProvider {
       // what turned a known limit into an unreadable parser error.
       if (response.stop_reason === "max_tokens") {
         truncation = new AITruncationError(
-          "That plan is larger than Vezri can read in one pass.",
+          // Neutral: the surface knows whether "larger" means a document or
+          // a task's worth of steps. See lib/ai/failure-copy.
+          "That was larger than Vezri could finish in one pass.",
           {
             action: request.action,
             maxTokens,
@@ -184,7 +258,7 @@ export class AnthropicProvider implements AIProvider {
       return this.decode(response, request);
     }
 
-    throw truncation ?? new AIExtractionError("Vezri couldn't read that plan.");
+    throw truncation ?? new AIExtractionError("Vezri couldn't finish that.");
   }
 
   /**
@@ -203,7 +277,11 @@ export class AnthropicProvider implements AIProvider {
 
     if (!body.trim()) {
       throw new AIExtractionError(
-        "Vezri read the document but couldn't turn it into a plan. Try a clearer version, or paste the plan text.",
+        // Surface-neutral on purpose. This is the default `unusable_output`
+        // kind; lib/ai/failure-copy turns it into the sentence for whichever
+        // screen asked. Naming a document here is what put extraction copy on
+        // a task card.
+        "Vezri couldn't use what came back.",
       );
     }
 
@@ -212,7 +290,11 @@ export class AnthropicProvider implements AIProvider {
       json = JSON.parse(body);
     } catch (error) {
       throw new AIExtractionError(
-        "Vezri read the document but couldn't turn it into a plan. Try a clearer version, or paste the plan text.",
+        // Surface-neutral on purpose. This is the default `unusable_output`
+        // kind; lib/ai/failure-copy turns it into the sentence for whichever
+        // screen asked. Naming a document here is what put extraction copy on
+        // a task card.
+        "Vezri couldn't use what came back.",
         error,
       );
     }
@@ -221,7 +303,11 @@ export class AnthropicProvider implements AIProvider {
     const parsed = request.schema.safeParse(json);
     if (!parsed.success) {
       throw new AIExtractionError(
-        "Vezri read the document but couldn't turn it into a plan. Try a clearer version, or paste the plan text.",
+        // Surface-neutral on purpose. This is the default `unusable_output`
+        // kind; lib/ai/failure-copy turns it into the sentence for whichever
+        // screen asked. Naming a document here is what put extraction copy on
+        // a task card.
+        "Vezri couldn't use what came back.",
         parsed.error,
       );
     }

@@ -51,12 +51,24 @@ export interface AIProvider {
  * '}' after property value in JSON at position 25162".
  */
 export class AIExtractionError extends Error {
-  constructor(
-    message: string,
-    readonly cause?: unknown,
-  ) {
+  /**
+   * Why it failed, so the SURFACE can choose what to say.
+   *
+   * This is the field that was missing. Without it the provider had to write
+   * the user-facing sentence itself, and it only knew about one caller — plan
+   * extraction. So a billing failure on the "I'm stuck" panel rendered "Vezri
+   * couldn't work with that plan. Try a clearer version, or paste the plan
+   * text", which is the wrong surface AND advice no user can act on: nothing
+   * they type fixes an unpaid invoice. lib/ai/failure-copy owns the wording
+   * now, keyed by kind and by which screen is asking.
+   */
+  readonly kind: AIFailureKind;
+
+  constructor(message: string, cause?: unknown, kind: AIFailureKind = "unusable_output") {
     super(message);
     this.name = "AIExtractionError";
+    this.cause = cause;
+    this.kind = kind;
   }
 }
 
@@ -78,24 +90,43 @@ export class AIExtractionError extends Error {
  * a production 401 looking like a network blip for hours.
  */
 export type AIFailureKind =
+  // --- our side, and a retry will not help ---
+  /** No provider key configured. */
   | "not_configured"
+  /** 401 authentication_error / 403 permission_error — our credential. */
   | "unauthorised"
+  /** 402 billing_error — our account cannot pay. Nothing the user typed. */
+  | "billing"
+  /** 404 not_found_error — the model id we asked for is not available to us. */
+  | "not_found"
+  // --- our side, and a retry might help ---
+  /** 429 rate_limit_error. */
   | "rate_limited"
+  /** 529 overloaded_error. */
+  | "overloaded"
+  /** The call did not come back in time. */
   | "timed_out"
+  /** 5xx, or the service could not be reached at all. */
   | "unavailable"
+  // --- about what we sent ---
+  /** 413 request_too_large. */
+  | "too_large"
+  /** 400 invalid_request_error that is genuinely about the request. */
   | "bad_request"
+  /** A 200 whose body did not satisfy the schema. */
   | "unusable_output"
+  /** The model ran out of output budget mid-value. */
   | "truncated";
 
 /** Thrown when the provider call itself failed, with the cause classified. */
 export class AIServiceError extends AIExtractionError {
   constructor(
     message: string,
-    readonly kind: AIFailureKind,
+    kind: AIFailureKind,
     readonly status: number | null,
     cause?: unknown,
   ) {
-    super(message, cause);
+    super(message, cause, kind);
     this.name = "AIServiceError";
   }
 }
@@ -105,7 +136,7 @@ export class AITruncationError extends AIExtractionError {
     message: string,
     readonly detail: { action: string; maxTokens: number; outputTokens: number },
   ) {
-    super(message);
+    super(message, undefined, "truncated");
     this.name = "AITruncationError";
   }
 }

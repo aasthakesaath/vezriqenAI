@@ -1,6 +1,21 @@
 -- =========================================================================
--- PENDING MIGRATIONS 0012 and 0013 — run this whole file in the Supabase
--- SQL editor. 0001-0011 are applied.
+-- APPLIED 2026-09-14. 0001-0013 are now applied.
+--
+-- Run by the project owner in the Supabase SQL editor. Verified afterwards:
+-- normalized_task_title exists, tasks_goal_title_key_unique exists,
+-- task_guidance exists with exactly one policy, tasks went 325 rows to 291
+-- with zero duplicates remaining, and both split_at and split_from_task_id
+-- are present on tasks.
+--
+-- So 0012 removed 34 surplus rows — 34 pieces of work that were on the plan
+-- twice, each of them a task someone could tick off and still see sitting
+-- there. That is the count the migration exists for, and it is now zero.
+--
+-- The file stays here, as APPLY_0005_0006 and APPLY_0007 do: it is the record
+-- of what was run against live data and what it did, and STEP 1 below is
+-- still the query that answers "are there duplicates" on any future day.
+-- Nothing in it needs running again — every statement is idempotent, but the
+-- clean-up has nothing left to clean.
 --
 -- 0012 stops the same task being stored twice in one goal. 0013 adds the
 -- table the how-to steps are cached in, and the two columns that record a
@@ -10,16 +25,17 @@
 -- while duplicates exist, so the clean-up runs first, inside the same
 -- transaction. Everything here is idempotent — running it twice is a no-op.
 --
--- APPLY THIS BEFORE THE DEPLOY. lib/plan/build.ts upserts on
--- (goal_id, title_key); against a database without that column PostgREST
--- rejects the on_conflict target and extraction fails at the task write. The
--- schema preflight in the extract route catches it first and says which
--- column is missing, but it is still a stopped extraction.
+-- WHAT IT UNBLOCKED. lib/plan/build.ts upserts on (goal_id, title_key), so
+-- extraction could not have written a task batch without the generated
+-- column; "Break it into N pieces" writes split_at and split_from_task_id;
+-- and the how-to steps had nowhere to cache, so every card expansion paid for
+-- a fresh model call. All three are live now.
 -- =========================================================================
 
 
 -- =========================================================================
--- STEP 1 — the duplicate count BEFORE. Read-only; run it on its own first.
+-- STEP 1 — the duplicate count. Read-only. It was 34 before the run and 0
+-- after; it stays the query to run if duplicates are ever suspected again.
 --
 -- "Duplicate rows" means surplus rows: a title stored three times in one goal
 -- counts as two. That is the number that goes to zero.
@@ -54,8 +70,8 @@ limit 25;
 
 
 -- =========================================================================
--- STEP 2 — run supabase/migrations/0012_task_title_dedupe.sql, whole, then
--- supabase/migrations/0013_task_guidance.sql, whole.
+-- STEP 2 — DONE 2026-09-14: supabase/migrations/0012_task_title_dedupe.sql
+-- then supabase/migrations/0013_task_guidance.sql, each run whole.
 --
 -- 0012 prints its own before/after to the Notices pane:
 --   [0012] duplicate task rows before: N

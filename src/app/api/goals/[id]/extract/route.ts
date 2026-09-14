@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildPlanForGoal, isIncomplete } from "@/lib/plan/build";
 import { AIExtractionError } from "@/lib/ai";
+import {
+  aiFailureMessage,
+  aiFailureStatus,
+  isRetryableFailure,
+} from "@/lib/ai/failure-copy";
 import { AI_CONFIGURED, ConfigurationError, SUPABASE_CONFIGURED } from "@/lib/env";
 import { assertSchemaReady, describeSchemaGaps } from "@/lib/db/verify-schema";
 
@@ -102,21 +107,35 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           missing_information: result.smart.missing_information,
         });
       } catch (error) {
-        const status =
-          error instanceof ConfigurationError ? 503 : error instanceof AIExtractionError ? 422 : 500;
         // The response is already 200 with an open stream by the time this
         // runs, so the status travels IN the final line. The client treats a
         // failed line exactly as it treats a non-2xx.
-        send({
-          type: "error",
-          status,
-          error:
-            error instanceof ConfigurationError || error instanceof AIExtractionError
-              ? error.message
-              : error instanceof Error
+        //
+        // Extraction is the one surface whose input-side copy is about a
+        // document, because it is the one surface that HAS one. It still goes
+        // through the shared table, so a failure on our side — a billing
+        // problem, a bad credential — says so here as plainly as it does on a
+        // task card, instead of telling someone to paste a clearer plan.
+        if (error instanceof AIExtractionError) {
+          send({
+            type: "error",
+            status: aiFailureStatus(error.kind),
+            error: aiFailureMessage("extraction", error.kind),
+            retryable: isRetryableFailure(error.kind),
+          });
+        } else {
+          send({
+            type: "error",
+            status: error instanceof ConfigurationError ? 503 : 500,
+            error:
+              error instanceof ConfigurationError
                 ? error.message
-                : "Couldn't read that plan.",
-        });
+                : error instanceof Error
+                  ? error.message
+                  : "Couldn't read that plan.",
+            retryable: !(error instanceof ConfigurationError),
+          });
+        }
       } finally {
         controller.close();
       }
