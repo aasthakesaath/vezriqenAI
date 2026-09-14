@@ -1,13 +1,34 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   BLOCK_CATEGORIES,
+  COACH_SYSTEM,
   INTERVENTIONS_FOR,
+  coachPrompt,
   fallbackIntervention,
   type BlockCategory,
 } from "@/lib/coach/interventions";
+import ExecutionBlockCoach from "@/components/coach/ExecutionBlockCoach";
 import { calculateImpact, isSafeReplan, type Replan } from "@/lib/coach/replan";
 import { bestWindow, rankEffectiveInterventions, windowForHour } from "@/lib/coach/profile";
 import { BLOCK_CHOICES } from "@/lib/app-copy";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: () => {}, push: () => {} }),
+}));
+
+/** Prompts are hard-wrapped for reading; assertions are about the words. */
+const unwrapped = (prompt: string) => prompt.replace(/\s+/g, " ");
+
+const html = (node: React.ReactElement) => renderToStaticMarkup(node);
+const text = (markup: string) =>
+  markup
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&#x27;|&apos;|&rsquo;/g, "'")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 
 /**
  * PRD §13 is the product's core differentiator, and its whole claim rests on
@@ -93,6 +114,119 @@ describe("coaching without the model (PRD §13 must still work)", () => {
       const intervention = fallbackIntervention(category as BlockCategory, "A task", "Sam");
       expect(intervention.message, `${category}: "${intervention.message}"`).not.toMatch(forbidden);
     }
+  });
+});
+
+describe("the panel asks once, and one chip is the whole answer", () => {
+  const markup = html(
+    <ExecutionBlockCoach taskId="t1" taskTitle="Finish module 4" onDone={() => {}} />,
+  );
+
+  it("asks the one question §13 asks", () => {
+    expect(text(markup)).toContain("What got in the way?");
+    // The eight choices plus one submit. No ninth chip, no text box.
+    expect(markup.match(/<button/g)).toHaveLength(BLOCK_CATEGORIES.length + 1);
+  });
+
+  /**
+   * The free-text box is gone, for the same reason it went from StuckPanel.
+   *
+   * "Anything else? (optional)" sat under the chips, before anything had been
+   * picked, with no sign that picking was required — and it said the same
+   * thing as the "Something else" chip in a vaguer way. People typed into it
+   * and nothing happened, because the chips were the submit and none had been
+   * clicked.
+   */
+  it("offers no free-text box, and no second way to say Something else", () => {
+    expect(markup).not.toContain("<input");
+    expect(markup).not.toContain("<textarea");
+    expect(text(markup)).not.toContain("Anything else?");
+    // The chip that covers the case is still there, and is the only one.
+    expect(text(markup)).toContain("Something else");
+  });
+
+  it("disables the submit until a chip is picked, and says why", () => {
+    // The affordance the text box never gave. `disabled` rather than a click
+    // that shows an error: a control that can do nothing should look like it.
+    const submit = markup.slice(markup.lastIndexOf("<button"));
+    expect(submit).toContain("disabled");
+    expect(text(markup)).toContain("Pick one to carry on.");
+  });
+
+  it("makes the selected chip readable without relying on colour", () => {
+    // Single-select, so every chip carries its state for a screen reader.
+    expect(markup.match(/aria-pressed="false"/g)).toHaveLength(BLOCK_CATEGORIES.length);
+  });
+
+  it("sends no user_text, because there is nothing left to type it into", () => {
+    const panel = readFileSync("src/components/coach/ExecutionBlockCoach.tsx", "utf8");
+    expect(panel).not.toContain("user_text");
+    const route = readFileSync("src/app/api/tasks/[id]/block/route.ts", "utf8");
+    const schema = route.slice(
+      route.indexOf("const BlockSchema"),
+      route.indexOf("export async function"),
+    );
+    expect(schema).not.toMatch(/user_text/);
+  });
+});
+
+describe("what the coach is told once the free text is gone", () => {
+  it("no longer asks the model to weigh text that cannot exist", () => {
+    expect(COACH_SYSTEM).not.toMatch(/what they typed|in their words|has told you/i);
+    expect(unwrapped(COACH_SYSTEM)).toContain("there is no free text");
+  });
+
+  /**
+   * The panel has two buttons and no field. A question back from the coach is
+   * a dead end — the user can only accept or decline it, and neither answers
+   * it. This is the prompt-side half of dropping "ask_user" from the barrier
+   * that now carries no detail at all.
+   */
+  it("forbids asking a question the panel cannot take an answer to", () => {
+    expect(unwrapped(COACH_SYSTEM)).toContain("Never ask the user a question");
+  });
+
+  it("never offers an unanswerable question as the intervention itself", () => {
+    expect(INTERVENTIONS_FOR.something_else).not.toContain("ask_user");
+  });
+
+  it("tells the model what to do when the barrier is Something else", () => {
+    const guidance = unwrapped(COACH_SYSTEM);
+    expect(guidance).toContain('If what got in the way was "Something else"');
+    // The rule that matters: an unknown barrier is not licence to invent one.
+    expect(guidance).toMatch(/must not invent|do not guess at a feeling/i);
+    expect(guidance).toContain("Work from the task instead");
+  });
+
+  it("builds a prompt that never references typed text", () => {
+    const prompt = coachPrompt({
+      taskTitle: "Finish module 4",
+      taskType: "deep_work",
+      estimatedMinutes: 90,
+      deadline: null,
+      goalTitle: "Pass the exam",
+      category: "something_else",
+      categoryLabel: "Something else",
+      externalParty: null,
+      allowedInterventions: INTERVENTIONS_FOR.something_else,
+      previouslyEffective: [],
+      productiveWindow: "morning",
+    });
+    expect(prompt).toContain("What got in the way: Something else");
+    expect(prompt).not.toMatch(/their words|they typed/i);
+    // The task is what is left to reason from, so it has to all be there.
+    expect(prompt).toContain("Finish module 4");
+    expect(prompt).toContain("deep_work");
+    expect(prompt).toContain("90 minutes");
+  });
+
+  // Offline, "Something else" used to come back as "What would the very first
+  // action be?" — a question under two buttons, neither of which answers it.
+  it("answers an unknown barrier with an action rather than a question", () => {
+    const intervention = fallbackIntervention("something_else", "Finish module 4", null);
+    expect(intervention.message).not.toContain("?");
+    expect(intervention.proposal.new_task_title).toContain("Finish module 4");
+    expect(INTERVENTIONS_FOR.something_else).toContain(intervention.intervention_type);
   });
 });
 

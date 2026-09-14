@@ -26,6 +26,17 @@ type Intervention = {
  * Step 1 is one short question with quick choices. Step 2 is one intervention,
  * which the user accepts or declines. Nothing is rescheduled on the way
  * through: that is the whole point of the section.
+ *
+ * ONE CHIP IS THE WHOLE INPUT. An "Anything else? (optional)" box used to sit
+ * under the chips — the same box, and the same failure, as the one cut from
+ * StuckPanel: it appeared before anything had been picked, gave no sign that
+ * picking was required, and said the same thing as the "Something else" chip
+ * in a vaguer form. People typed into it and nothing happened, because the
+ * chips were the submit and none had been clicked.
+ *
+ * So the chips select now and a button submits. One more tap, bought
+ * deliberately: it gives the panel somewhere to show that a choice is
+ * required, which is the thing that was missing.
  */
 export default function ExecutionBlockCoach({
   taskId,
@@ -40,7 +51,8 @@ export default function ExecutionBlockCoach({
 }) {
   const router = useRouter();
   const [intervention, setIntervention] = useState<Intervention | null>(null);
-  const [detail, setDetail] = useState("");
+  /** The chip that is selected. Null until one is, which is what gates submit. */
+  const [category, setCategory] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [applied, setApplied] = useState<"accepted" | "declined" | null>(null);
@@ -49,16 +61,15 @@ export default function ExecutionBlockCoach({
   // declines an intervention.
   const [thinking, setThinking] = useState<string | null>(null);
 
-  async function chooseBarrier(category: string) {
+  async function chooseBarrier(chosen: string) {
     setBusy(true);
-    setThinking(category);
+    setThinking(chosen);
     setError(null);
     const response = await fetch(`/api/tasks/${taskId}/block`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        category,
-        user_text: detail.trim() || undefined,
+        category: chosen,
         check_in_id: checkInId ?? undefined,
       }),
     });
@@ -158,6 +169,8 @@ export default function ExecutionBlockCoach({
     );
   }
 
+  const chosen = BLOCK_CHOICES.find((choice) => choice.id === category);
+
   return (
     <div className="mt-4 rounded-xl border border-blush bg-blush-wash p-5">
       <fieldset disabled={busy}>
@@ -167,29 +180,45 @@ export default function ExecutionBlockCoach({
           &rdquo;.
         </p>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {BLOCK_CHOICES.map((choice) => (
-            <button
-              key={choice.id}
-              type="button"
-              onClick={() => chooseBarrier(choice.id)}
-              className="rounded-pill border border-blush bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-blush-light disabled:opacity-60"
-            >
-              {choice.label}
-            </button>
-          ))}
+        {/* A single-select group. aria-pressed carries the state a screen
+            reader needs; the border and fill carry it for everyone else, so
+            the selection is never colour alone (WCAG 1.4.1). */}
+        <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={BLOCK_QUESTION}>
+          {BLOCK_CHOICES.map((choice) => {
+            const selected = category === choice.id;
+            return (
+              <button
+                key={choice.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => setCategory(choice.id)}
+                className={`rounded-pill border px-4 py-2 text-sm transition-colors disabled:opacity-60 ${
+                  selected
+                    ? "border-berry bg-berry font-semibold text-white"
+                    : "border-blush bg-white font-medium text-ink hover:bg-blush-light"
+                }`}
+              >
+                {choice.label}
+              </button>
+            );
+          })}
         </div>
 
-        <label htmlFor={`detail-${taskId}`} className="mt-4 block text-sm font-medium text-ink">
-          Anything else? <span className="font-normal text-mauve-light">(optional)</span>
-        </label>
-        <input
-          id={`detail-${taskId}`}
-          type="text"
-          value={detail}
-          onChange={(e) => setDetail(e.target.value)}
-          className="mt-1.5 w-full rounded-xl border border-blush bg-white px-4 py-2.5 text-sm text-ink focus:border-berry"
-        />
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <button
+            type="button"
+            onClick={() => chosen && void chooseBarrier(chosen.id)}
+            /* Disabled until a chip is picked — the affordance the free-text
+               box never gave. `disabled` rather than a click that shows an
+               error: a control that cannot do anything should look like it. */
+            disabled={!chosen || busy}
+            className="rounded-pill bg-berry px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-berry-deep disabled:cursor-not-allowed disabled:bg-mauve-light disabled:opacity-60"
+          >
+            Work out what to do
+          </button>
+
+          {!chosen && <span className="text-sm text-mauve">Pick one to carry on.</span>}
+        </div>
       </fieldset>
 
       {thinking && (

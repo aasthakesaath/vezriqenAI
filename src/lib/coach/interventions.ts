@@ -53,7 +53,12 @@ export const INTERVENTIONS_FOR: Record<BlockCategory, InterventionType[]> = {
   waiting_on_someone: ["follow_up_other_person", "alternative_action", "resolve_prerequisite"],
   forgot: ["reschedule_window", "timebox"],
   priorities_changed: ["reduce_scope", "move_lower_priority", "alternative_action"],
-  something_else: ["ask_user", "clarify_first_action", "shrink_first_step"],
+  // "ask_user" is gone from here. It asks a question, and this panel has two
+  // buttons — "Let's do that" and "Not this time" — with nowhere to type an
+  // answer. It was the first-listed option for the one barrier that now
+  // carries no detail at all, so it was also the most likely: a question the
+  // user cannot answer is the dead end §13 exists to remove.
+  something_else: ["clarify_first_action", "shrink_first_step"],
 };
 
 /**
@@ -83,10 +88,15 @@ export type Intervention = z.infer<typeof InterventionSchema>;
 
 export const COACH_SYSTEM = `You are Vezri, an execution coach.
 
-The user did not complete a task and has told you what got in the way. Your job
-is to remove the barrier, NOT to move the task to a later date.
+The user did not complete a task and has picked what got in the way from a short
+list of choices. That choice and the task are everything you have — there is no
+free text, so do not write as though there were. Your job is to remove the
+barrier, NOT to move the task to a later date.
 
 Rules:
+- Never ask the user a question. They have two buttons, "Let's do that" and
+  "Not this time", and no way to type an answer, so a question is a dead end.
+  Propose the thing you would have asked about instead.
 - Give exactly ONE intervention. No lists of options, no motivational essay.
 - Rescheduling is a last resort. Only choose reschedule_window when the barrier
   really was the clock, and never for avoidance or overwhelm.
@@ -97,6 +107,15 @@ Rules:
 - If the task is blocked on another person, say plainly that it is not in their
   control right now, propose the follow-up, and move on.
 - message is at most two short sentences, addressed to the user.
+
+If what got in the way was "Something else", the barrier is genuinely unknown
+and you must not invent one. Do not guess at a feeling, a mood, or a reason the
+user did not give — that is a fact about them you were not told. Work from the
+task instead: the kind of work it is, its size, and what that kind of work
+usually demands first. Choose an intervention that helps whatever the real
+cause turns out to be — opening the thing, a first ten minutes, naming the
+first concrete action — because one that only works if your guess was right is
+worse than none.
 
 BOUNDARY: You are an execution coach, not a clinician. You may help with
 starting, overwhelm, prioritisation and practical barriers. You must not
@@ -113,7 +132,6 @@ export function coachPrompt(input: {
   goalTitle: string;
   category: BlockCategory;
   categoryLabel: string;
-  userText: string | null;
   externalParty: string | null;
   allowedInterventions: InterventionType[];
   /** §10 — what has actually worked for this person before. */
@@ -126,7 +144,9 @@ export function coachPrompt(input: {
     input.deadline ? `Deadline: ${input.deadline}` : `No deadline.`,
     input.externalParty ? `Blocked on: ${input.externalParty}` : null,
     `What got in the way: ${input.categoryLabel}`,
-    input.userText ? `In their words: "${input.userText}"` : null,
+    // No "in their words" line. The panel used to carry a free-text box and
+    // this prompt leaned on it; with the box gone that line would have pointed
+    // at nothing. The choice and the task are the whole input.
     `They are usually most productive in the ${input.productiveWindow}.`,
     input.previouslyEffective.length
       ? `Interventions that have worked for this person before: ${input.previouslyEffective.join(", ")}.`
@@ -208,12 +228,20 @@ export function fallbackIntervention(
         message: `No problem. Let's put it somewhere you'll actually see it.`,
         proposal: base.proposal,
       };
+    // "Something else" — the barrier is unknown, so this has to be an action
+    // that helps whatever the real cause is rather than a guess at it. It used
+    // to ask "what would the very first action be?", which the panel has no
+    // way to answer: a question with two buttons under it is a dead end.
     default:
       return {
         ...base,
-        intervention_type: "clarify_first_action",
-        message: `Let's find the first concrete step. What would the very first action on "${taskTitle}" be?`,
-        proposal: base.proposal,
+        intervention_type: "shrink_first_step",
+        message: `Let's find the way in. Do just the first ten minutes of "${taskTitle}" — that usually shows what's actually in the way.`,
+        proposal: {
+          ...base.proposal,
+          new_task_title: `First 10 minutes of: ${taskTitle}`,
+          new_task_minutes: 10,
+        },
       };
   }
 }
