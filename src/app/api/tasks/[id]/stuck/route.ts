@@ -57,7 +57,12 @@ const Body = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("analyse"),
     reason: z.enum(BLOCK_CATEGORIES),
-    note: z.string().max(2000).optional(),
+    // No `note`. The panel's free-text box is gone (see StuckPanel), so
+    // nothing sends one and a parameter nothing fills is a parameter that
+    // rots. Deliberately NOT .strict(): a browser still holding the previous
+    // bundle keeps sending `note`, and zod drops an unknown key silently —
+    // which is what we want during a rollout. Refusing the request would turn
+    // a stale tab into a 400 for no gain, since the text is not wanted anyway.
     check_in_id: z.string().uuid().optional(),
   }),
   z.object({ action: z.literal("commit"), block_id: z.string().uuid() }),
@@ -145,7 +150,7 @@ async function analyse(options: {
   supabase: Client;
   userId: string;
   task: TaskRow;
-  input: { reason: BlockCategory; note?: string; check_in_id?: string };
+  input: { reason: BlockCategory; check_in_id?: string };
 }) {
   const { supabase, userId, task, input } = options;
 
@@ -178,7 +183,6 @@ async function analyse(options: {
         goalLabel: goalLabel(firstOf(task.goals) ?? {}),
         milestoneTitle: firstOf<{ title: string }>(task.milestones)?.title ?? null,
         reasonLabel,
-        note: input.note?.trim() || null,
         externalParty,
       }),
       schema: UnblockSchema,
@@ -209,7 +213,11 @@ async function analyse(options: {
       task_id: task.id,
       check_in_id: input.check_in_id ?? null,
       category: input.reason,
-      user_text: input.note?.trim() || null,
+      // Always null from this route: the panel offers no free text. The column
+      // stays — /api/tasks/[id]/block still writes it from the Execution Block
+      // Coach, which has its own detail field — and history keeps whatever was
+      // written before the box was cut.
+      user_text: null,
       intervention_type: interventionForReason(input.reason),
       // The whole analysis, so the three buttons act on exactly what the
       // person was shown rather than on a second, differently-worded call.
@@ -226,7 +234,7 @@ async function analyse(options: {
     user_id: userId,
     goal_id: task.goal_id,
     action_type: "task_unblock",
-    structured_input: { task: task.title, reason: input.reason, had_note: Boolean(input.note) },
+    structured_input: { task: task.title, reason: input.reason },
     structured_output: unblock,
     explanation: unblock.obstacle,
     model_version: modelVersion,

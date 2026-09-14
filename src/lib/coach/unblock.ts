@@ -5,17 +5,23 @@ import { BLOCK_CATEGORIES, INTERVENTIONS_FOR, type BlockCategory, type Intervent
 /**
  * What happens after "I'm stuck" (PRD §13).
  *
- * The button collected a barrier and a line of free text and then ended in a
- * closed panel. The reason was recorded — execution_blocks has the row — but
- * nothing the person could act on came back, which makes telling Vezri you are
- * stuck a worse use of thirty seconds than saying nothing.
+ * The button collected a barrier and then ended in a closed panel. The reason
+ * was recorded — execution_blocks has the row — but nothing the person could
+ * act on came back, which makes telling Vezri you are stuck a worse use of
+ * thirty seconds than saying nothing.
+ *
+ * THE INPUT IS ONE CHIP. A free-text box sat under the chips until it was cut:
+ * it appeared before anything was picked, gave no sign a chip was required, and
+ * duplicated the "Something else" chip in a second, vaguer form — so people
+ * typed into it and nothing happened. The prompt leaned on that text, which is
+ * why removing the box meant rewriting the prompt rather than deleting a field.
  *
  * So the answer has exactly three parts, and each one exists because the two
  * without it are not enough:
  *
  *   obstacle      one sentence naming what is actually in the way. Not the
- *                 barrier they picked — that is a category — but the thing
- *                 their own words describe. Being told what the problem is
+ *                 barrier they picked — that is a category — but what it means
+ *                 for THIS task at THIS size. Being told what the problem is
  *                 is most of being unstuck.
  *   firstAction   ONE thing, five minutes or less, doable now. Not a list:
  *                 a person who could pick from a list of three was not stuck.
@@ -61,16 +67,17 @@ export const UnblockSchema = z.object({
 export type Unblock = z.infer<typeof UnblockSchema>;
 
 export const UNBLOCK_SYSTEM = instructionSystem(
-  `Someone told you they are stuck on one task, picked a reason from a short
-list, and may have typed a line of their own. Give them the way out.
+  `Someone told you they are stuck on one task and picked a reason from a short
+list. That reason and the task are everything you have — there is no free text,
+so do not write as though there were, and do not ask for more.
 
 Return three things and nothing else:
 
 1. obstacle — ONE sentence naming what is actually in the way, in their
-   situation, not in general. Take the reason they picked seriously and take
-   what they typed more seriously than that. Do not repeat their words back to
-   them, do not tell them the feeling is normal, and do not mention time
-   having passed.
+   situation, not in general. Take the reason they picked seriously and read it
+   against THIS task: "it felt too big" on a two-hour deep-work task and on a
+   ten-minute email are different obstacles, and the task tells you which. Do
+   not tell them the feeling is normal, and do not mention time having passed.
 2. first_action — ONE thing to do, ${MAX_FIRST_ACTION_MINUTES} minutes or
    less, that can be started immediately with nothing else in place. It must
    make the obstacle smaller, not merely be easy. One action, never a choice
@@ -82,7 +89,18 @@ Return three things and nothing else:
 
 If the reason they gave is that they are waiting on another person, the
 obstacle is the wait, the first action is the specific message that ends it,
-and the breakdown is what they do with the answer.`,
+and the breakdown is what they do with the answer.
+
+If the reason they gave is "Something else", the barrier is genuinely unknown
+and you must not invent one. Do not guess at a feeling, a mood, or a reason
+they did not give — that is a fact about them you were not told. Work from the
+task instead: name the obstacle this KIND of work usually presents at this
+size, in one sentence, hedged honestly if it has to be ("the next move here
+isn't obvious" is a true sentence; "you're feeling overwhelmed" is not). Then
+make the first action one that helps whatever the real cause turns out to be —
+opening the thing, writing the first line, finding the one fact that is
+missing. An action that only works if your guess was right is worse than no
+action at all.`,
 );
 
 export function unblockPrompt(input: {
@@ -93,7 +111,6 @@ export function unblockPrompt(input: {
   goalLabel: string;
   milestoneTitle: string | null;
   reasonLabel: string;
-  note: string | null;
   externalParty: string | null;
 }): string {
   return [
@@ -106,7 +123,10 @@ export function unblockPrompt(input: {
     input.externalParty ? `This task waits on: ${input.externalParty}` : null,
     "",
     `What they said got in the way: ${input.reasonLabel}`,
-    input.note ? `In their own words: "${input.note}"` : "They did not add anything of their own.",
+    // No "in their own words" line. The panel used to carry a free-text box
+    // and this prompt leaned on it — "take what they typed more seriously
+    // than the reason" — so with the box gone that instruction would have
+    // pointed at nothing. The reason chip and the task are the whole input.
     "",
     "Return the obstacle, the first action, and the breakdown.",
   ]
