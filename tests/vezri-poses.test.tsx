@@ -54,10 +54,24 @@ describe("the pose map is the one place a state picks artwork", () => {
           continue;
         }
         if (!/\.tsx?$/.test(entry)) continue;
-        // The two files that legitimately name the artwork: the pose table
-        // itself, and the component that renders it.
+        // The three files that legitimately name the artwork: the pose table
+        // itself, the component that renders it, and lib/site.ts.
         if (path.endsWith(join("lib", "vezri-poses.ts"))) continue;
         if (path.endsWith(join("components", "VezriWorking.tsx"))) continue;
+        // site.ts is the public site's own single source for copy and assets,
+        // which is the same guarantee this test exists to protect — one edit
+        // changes the artwork — just on a different axis. The rule being kept
+        // is that no SCREEN names a file, and /about does not: it renders
+        // MY_STORY_VEZRI.imageSrc.
+        //
+        // The My Story block cannot go through POSES instead. That map is
+        // product state -> pose and its alt text describes the STATE ("Vezri
+        // is working this out"); the test below forbids it from describing the
+        // bird at all. The block needs the opposite — a description of her,
+        // because the drawing carries part of the argument there (§30.11).
+        // Routing it through POSES would mean a change to the loading-card
+        // copy silently rewrote a marketing page's alt text.
+        if (path.endsWith(join("lib", "site.ts"))) continue;
         const source = readFileSync(path, "utf8");
         if (/vezri-(reading|thinking|confused)\.webp/.test(source)) offenders.push(path);
       }

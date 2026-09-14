@@ -3,51 +3,62 @@ import Image from "next/image";
 import { FinalCta } from "@/components/Cta";
 import {
   BRAND,
+  FINAL_CTA_STORY,
   FOUNDER,
+  MY_STORY_EYEBROW,
   MY_STORY_LABEL,
   MY_STORY_PARAGRAPHS,
   MY_STORY_PARAGRAPHS_AFTER,
+  MY_STORY_PARAGRAPHS_OUTWARD,
+  MY_STORY_PILLARS,
   MY_STORY_PULLQUOTE,
+  MY_STORY_SUBHEAD,
+  MY_STORY_VEZRI,
   STORY_IMAGE_ALT,
+  STORY_IMAGE_NOTE,
   STORY_IMAGE_SRC,
 } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: `${MY_STORY_LABEL} — Why I Built ${BRAND}`,
-  description: `Why ${FOUNDER.name} built ${BRAND}: a real student, a real problem, and a bigger purpose.`,
+  description: `Why ${FOUNDER.name} built ${BRAND}: an SAT study plan, a week that never went to plan, and what came out of it.`,
 };
 
 /** The artwork's real dimensions. next/image needs them to reserve the space. */
 const HERO_WIDTH = 1448;
 const HERO_HEIGHT = 1086;
 
-const PILLARS = [
-  {
-    title: "A Personal Challenge",
-    body: "SAT prep taught me that having a plan isn't the hard part — following it is.",
-    icon: <path d="M12 20.5s-7.5-4.6-7.5-9.6A4.4 4.4 0 0112 8.6a4.4 4.4 0 017.5 2.3c0 5-7.5 9.6-7.5 9.6z" />,
-  },
-  {
-    title: "A Bigger Purpose",
-    body: `So I built ${BRAND} to help others turn their plans into progress.`,
-    icon: <path d="M5 20V12m7 8V5m7 15v-6" />,
-  },
-  {
-    title: "For Every Dream",
-    body: "Whether it's an exam, a healthier you, or a big idea — your goals matter.",
-    icon: (
-      <>
-        <circle cx="9" cy="8.5" r="3" />
-        <path d="M3.5 20a5.5 5.5 0 0111 0M16.5 6.2a3 3 0 010 5.6M17.5 20a5.6 5.6 0 00-2.2-4.4" />
-      </>
-    ),
-  },
-  {
-    title: "You've Got This",
-    body: `And you don't have to do it alone. ${BRAND} is here to help.`,
-    icon: <path d="M12 3.8l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7-5.1 2.7 1-5.7-4.1-4 5.7-.8z" />,
-  },
-];
+/**
+ * One icon per pillar, keyed by the id in MY_STORY_PILLARS — the same split the
+ * homepage uses, so the copy stays in lib/site.ts and only the drawing lives
+ * here. Each icon answers its card's moment: a target for the next step, a
+ * speech bubble for the day that got missed, a path that bends for the week
+ * that changed, two figures for the thing that needs somebody else.
+ */
+const PILLAR_ICONS: Record<string, React.ReactNode> = {
+  next: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="12" cy="12" r="0.6" fill="currentColor" />
+    </>
+  ),
+  missed: (
+    <path d="M4 5.5A1.5 1.5 0 015.5 4h13A1.5 1.5 0 0120 5.5v8a1.5 1.5 0 01-1.5 1.5H10l-4.2 3.6a.6.6 0 01-1-.46V15H5.5A1.5 1.5 0 014 13.5z" />
+  ),
+  week: (
+    <>
+      <path d="M3 18h4.5a4.5 4.5 0 004.5-4.5v-3A4.5 4.5 0 0116.5 6H21" />
+      <path d="M17.5 3L21 6l-3.5 3" />
+    </>
+  ),
+  waiting: (
+    <>
+      <circle cx="9" cy="8.5" r="3" />
+      <path d="M3.5 20a5.5 5.5 0 0111 0M16.5 6.2a3 3 0 010 5.6M17.5 20a5.6 5.6 0 00-2.2-4.4" />
+    </>
+  ),
+};
 
 /**
  * The story artwork, across the top of the page.
@@ -100,7 +111,7 @@ function StoryHero({ src }: { src: string }) {
           />
         </div>
         <figcaption className="note mt-4 text-center text-xl leading-tight">
-          Real challenges. Brighter tomorrow. <span aria-hidden="true">&hearts;</span>
+          {STORY_IMAGE_NOTE} <span aria-hidden="true">&hearts;</span>
         </figcaption>
       </div>
     </figure>
@@ -111,31 +122,92 @@ function StoryHero({ src }: { src: string }) {
 function StoryHeading() {
   return (
     <>
-      <p className="eyebrow">A real student. A real problem. A bigger purpose.</p>
+      <p className="eyebrow">{MY_STORY_EYEBROW}</p>
       <h1 className="mt-4 text-balance text-[2.5rem] font-bold leading-[1.08] tracking-tight text-ink sm:text-5xl">
         Why I Built <span className="text-berry">{BRAND}</span>
       </h1>
-      <p className="mt-5 text-lg leading-relaxed text-mauve">
-        Sometimes a personal challenge can lead to something bigger.
-      </p>
+      <p className="mt-5 text-lg leading-relaxed text-mauve">{MY_STORY_SUBHEAD}</p>
     </>
   );
 }
 
-/** The approved narrative and signature, §30.6. */
-function StoryProse() {
+/** Shared by both halves of the narrative, so the two read as one column. */
+const PROSE = "space-y-4 text-[1.05rem] leading-relaxed text-mauve";
+
+/**
+ * The story, §30.6 — up to and including the line it ends on.
+ *
+ * It stops at "So I built Vezriqen AI™" because that is where the page hands
+ * over: the Vezri block comes next and turns outward, and StoryOutward picks
+ * up after it in the second person. Splitting the narrative in two is what
+ * makes that order structural rather than a thing to remember.
+ */
+function StoryOrigin() {
+  return (
+    <div className={`mt-8 ${PROSE}`}>
+      {MY_STORY_PARAGRAPHS.map((p) => (
+        <p key={p}>{p}</p>
+      ))}
+
+      <blockquote className="rounded-2xl border-l-4 border-berry bg-blush-wash px-5 py-4 font-semibold text-berry">
+        {MY_STORY_PULLQUOTE}
+      </blockquote>
+
+      {MY_STORY_PARAGRAPHS_AFTER.map((p) => (
+        <p key={p}>{p}</p>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Meet Vezri. Mascot beside the text on desktop, mascot above it on a phone —
+ * `flex-col` until `sm:flex-row`, so the stack order is the source order and
+ * no `order-` class has to hold it.
+ *
+ * Why this block is wider than the prose it interrupts: the reading column is
+ * `max-w-prose`, 65ch, and putting a 144px drawing beside 65ch leaves about 41
+ * characters a line — under the 45 that the comment on AboutPage sets as the
+ * floor. `max-w-3xl` is the width the pillars below already use, so the block
+ * lines up with something rather than inventing a width of its own.
+ *
+ * Type and spacing are the page's: the body is the same `text-[1.05rem]` as
+ * the story around it, and the heading is `text-xl`, which the hero caption
+ * already uses. Nothing new is introduced for one block.
+ */
+function VezriBlock({ className = "" }: { className?: string }) {
+  return (
+    <section aria-labelledby="meet-vezri" className={className}>
+      <div className="flex flex-col items-center gap-5 rounded-[1.75rem] bg-blush-wash px-6 py-8 ring-1 ring-blush/70 sm:flex-row sm:gap-8 sm:px-8">
+        <Image
+          src={MY_STORY_VEZRI.imageSrc}
+          alt={MY_STORY_VEZRI.imageAlt}
+          width={MY_STORY_VEZRI.imageWidth}
+          height={MY_STORY_VEZRI.imageHeight}
+          sizes="(max-width: 640px) 40vw, 144px"
+          className="w-36 shrink-0 select-none"
+        />
+        <div>
+          <h2 id="meet-vezri" className="text-xl font-semibold text-ink">
+            {MY_STORY_VEZRI.heading}
+          </h2>
+          <div className={`mt-3 ${PROSE}`}>
+            {MY_STORY_VEZRI.body.map((p) => (
+              <p key={p}>{p}</p>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The rest of the page, in the reader's direction. Signed, because the story above was mine. */
+function StoryOutward() {
   return (
     <>
-      <div className="mt-8 space-y-4 text-[1.05rem] leading-relaxed text-mauve">
-        {MY_STORY_PARAGRAPHS.map((p) => (
-          <p key={p}>{p}</p>
-        ))}
-
-        <blockquote className="rounded-2xl border-l-4 border-berry bg-blush-wash px-5 py-4 font-semibold text-berry">
-          {MY_STORY_PULLQUOTE}
-        </blockquote>
-
-        {MY_STORY_PARAGRAPHS_AFTER.map((p) => (
+      <div className={PROSE}>
+        {MY_STORY_PARAGRAPHS_OUTWARD.map((p) => (
           <p key={p}>{p}</p>
         ))}
       </div>
@@ -153,11 +225,11 @@ function StoryProse() {
 function Pillars({ className = "" }: { className?: string }) {
   return (
     <ul className={className}>
-      {PILLARS.map((p) => (
-        <li key={p.title} className="flex gap-4">
+      {MY_STORY_PILLARS.map((p) => (
+        <li key={p.id} className="flex gap-4">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blush-light text-berry">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              {p.icon}
+              {PILLAR_ICONS[p.id]}
             </svg>
           </span>
           <span>
@@ -182,8 +254,15 @@ function Pillars({ className = "" }: { className?: string }) {
  * 65ch, which is inside the 45–75 the typographic literature settles on and is
  * why the reading column is narrower than the picture above it.
  *
- * The pillars keep a wider container: they are a two-up grid of short lines,
- * not prose, and 65ch would squeeze them into one column on a laptop.
+ * The order below is the argument, not a layout: story, then Vezri, then the
+ * reader. The page is first person down to "So I built Vezriqen AI™", turns at
+ * the Vezri block, and everything after it — prose, pillars, closing CTA —
+ * addresses the reader and stays there.
+ *
+ * Two containers are wider than the reading column, and for the same reason:
+ * the Vezri block is prose with a drawing beside it, and the pillars are a
+ * two-up grid of short lines. 65ch would squeeze either into one cramped
+ * column on a laptop.
  */
 export default function AboutPage() {
   return (
@@ -197,18 +276,20 @@ export default function AboutPage() {
           <StoryHero src={STORY_IMAGE_SRC} />
 
           <div className="mx-auto mt-10 max-w-prose">
-            <StoryProse />
+            <StoryOrigin />
+          </div>
+
+          <VezriBlock className="mx-auto mt-10 max-w-3xl" />
+
+          <div className="mx-auto mt-10 max-w-prose">
+            <StoryOutward />
           </div>
 
           <Pillars className="mx-auto mt-12 grid max-w-3xl gap-5 sm:grid-cols-2" />
         </div>
       </section>
 
-      <FinalCta
-        heading="Have a goal ready? Let's make it happen."
-        support={`Join ${BRAND} and turn your plans into progress.`}
-        withMascot
-      />
+      <FinalCta heading={FINAL_CTA_STORY.heading} support={FINAL_CTA_STORY.support} withMascot />
     </>
   );
 }

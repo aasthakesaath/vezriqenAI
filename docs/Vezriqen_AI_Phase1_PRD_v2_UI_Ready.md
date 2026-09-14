@@ -1222,39 +1222,91 @@ Support text:
 
 The navigation label is always **My Story ♥**.
 
+**Revised 2026-09-14 (owner-directed copy pass).** The page is written for one
+reader: a student who has set a goal and struggled to hold themselves to it.
+Four rules govern every string on it, and they outrank the convenience of any
+individual line:
+
+1. **First person, real details.** The SAT story stays specific. Specifics are
+   what make it land, and the shape of it — a plan that stopped matching the
+   week — is recognisable to a student who is not sitting that exam.
+2. **No inspirational register.** No "journey", no "empower", no "unlock your
+   potential", and none of what the pass removed: "a bigger purpose",
+   "something bigger", "brighter tomorrow", "For Every Dream", "You've Got
+   This", "you deserve a partner".
+3. **Written to a student, not down to one.** No teen-speak, no exclamation
+   marks.
+4. **The page turns outward at the Vezri block and stays turned.** Everything
+   above that block is first person. Everything below it — prose, cards,
+   closing CTA — addresses the reader and never snaps back. The founder's
+   byline below the turn is third person and is the one exception.
+
 Page eyebrow:
-> **A REAL STUDENT. A REAL PROBLEM. A BIGGER PURPOSE.**
+> **A REAL STUDENT. A REAL PROBLEM. ONE FALCON.**
 
 Headline:
 > **Why I Built Vezriqen AI™**
 
 Subhead:
-> **Sometimes a personal challenge can lead to something bigger.**
+> **It started with a study plan I couldn't keep.**
 
-Story should be short, first-person, warm, and clearly tied to SAT preparation. Use this approved narrative as the baseline copy:
+Caption under the story artwork (handwritten register, heart rendered as
+decoration rather than as a word):
+> **Vezri and me, aiming at the same thing. ♥**
+
+Story, first person, up to and including the line it ends on:
 
 > I created Vezriqen AI™ while I was preparing for the SAT.
 >
-> I had a detailed study plan, but I kept falling behind. Some days I didn't know how to start. Other days school and life got busy. A reminder could tell me what I missed, but it didn't help me understand why — or what to do next.
+> I had a detailed study plan, but I kept falling behind. Some days I didn't know how to start. Other days school ran long or something came up, and the plan carried on describing a week I wasn't having. A reminder could tell me what I'd missed. It couldn't tell me why, or what to do next.
 >
 > **I wanted something that understood me, helped me get unstuck, and kept me moving.**
 >
 > So I built Vezriqen AI™.
+
+**The Vezri block.** Placed after the story above and before the turn outward.
+The mascot and the text sit side by side on desktop and stack on a phone with
+the mascot above. It is the hinge of the page: the heading and the first
+paragraph are still the founder's, the second hands the goal to the reader.
+
+> ### Meet Vezri, My Falcon Guide
 >
-> Now, Vezri helps people turn plans into real progress — whether the goal is an exam, a certification, a healthier routine, or a long-term dream like starting a company.
+> I chose a falcon because reaching a goal takes more than a plan — it takes focus, timing, and the ability to adjust course.
 >
-> Because having a plan is just the beginning. You deserve a partner that helps you follow through.
+> The goal is yours. Vezri doesn't hit the target for you — she helps you aim, adjust when life gets in the way, and keep moving until you reach it.
+
+The rest of the page, in the reader's direction:
+
+> It doesn't have to be an exam. Vezri works the same way for a certification, a routine you want to hold to, or something long-term like starting a company.
+>
+> Making the plan is never the hard part. Following it is — and that part you don't have to do on your own.
 >
 > **— Nikita Tejwani**  
 > Founder, Vezriqen AI™
 
+**The four cards** below the story. Each names a moment the reader has had,
+then says what Vezri does in it. Titles describe the work or the week, never
+the person — "When a day gets missed", not "when you fall behind", which is a
+diagnosis and this product does not make them.
+
+| Card | Body |
+| --- | --- |
+| **When the next step isn't obvious** | Vezri works backward from your goal and names the one thing to do next. |
+| **When a day gets missed** | It doesn't just move to tomorrow. Vezri works out what got in the way, then changes the plan around it. |
+| **When the week doesn't cooperate** | A test moves, something runs late, you get ill. The plan changes shape. The goal doesn't. |
+| **When something needs another person** | A recommendation letter, a reply, a signature. Vezri counts backward from when it's due and tells you when to ask. |
+
 Visual requirements:
 - Use a real, user-approved founder image if one is supplied or already available in the Calyqen AI™ project assets. Do not generate a fake founder portrait.
 - Keep the heart motif subtle and consistent with `My Story ♥` on Calyqen AI™.
-- A small Vezri mascot appearance is welcome near the final CTA, but the founder story should remain central.
+- The Vezri block uses the `thinking` pose, not the archer. The story artwork at the top of the page is already a drawn bow aimed at a target, and repeating that motif two blocks later reads as though the brand owns one drawing.
+- The block's mascot is content, not decoration: real alt text describing her, never `alt=""` and never the word "mascot" (§30.11).
+- A small Vezri appearance near the final CTA is still welcome, and stays decorative.
 
 Final CTA:
 > **Have a goal ready? Let's make it happen.**
+>
+> Bring the plan you already have. Vezri takes it from there.
 >
 > **Sign Up Free →**
 
