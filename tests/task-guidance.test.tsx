@@ -17,6 +17,7 @@ import {
   UNBLOCK_SYSTEM,
   UnblockSchema,
   interventionForReason,
+  unblockPrompt,
   isBlockCategory,
   parseStoredUnblock,
 } from "@/lib/coach/unblock";
@@ -285,9 +286,84 @@ describe("the panel offers three routes and every one of them writes", () => {
 
   it("starts by asking the one question §13 asks", () => {
     expect(text(markup)).toContain("What got in the way?");
-    // The eight quick choices, plus the optional free-text line.
-    expect(markup.match(/<button/g)).toHaveLength(BLOCK_CATEGORIES.length);
-    expect(text(markup)).toContain("Anything else?");
+    // The eight choices plus one submit. No ninth chip, no text box.
+    expect(markup.match(/<button/g)).toHaveLength(BLOCK_CATEGORIES.length + 1);
+  });
+
+  /**
+   * The free-text box is gone.
+   *
+   * It sat above the chips, before anything had been picked, with no sign
+   * that picking was required — and it said the same thing as the "Something
+   * else" chip in a vaguer way. People typed into it and nothing happened,
+   * because the chips were the submit and none had been clicked.
+   */
+  it("offers no free-text box, and no second way to say Something else", () => {
+    expect(markup).not.toContain("<input");
+    expect(markup).not.toContain("<textarea");
+    expect(text(markup)).not.toContain("Anything else?");
+    // The chip that covers the case is still there, and is the only one.
+    expect(text(markup)).toContain("Something else");
+  });
+
+  it("disables the submit until a chip is picked, and says why", () => {
+    // The affordance the text box never gave. `disabled` rather than a click
+    // that shows an error: a control that can do nothing should look like it.
+    const submit = markup.slice(markup.lastIndexOf("<button"));
+    expect(submit).toContain("disabled");
+    expect(text(markup)).toContain("Pick one to carry on.");
+  });
+
+  it("makes the selected chip readable without relying on colour", () => {
+    // Single-select, so every chip carries its state for a screen reader.
+    expect(markup.match(/aria-pressed="false"/g)).toHaveLength(BLOCK_CATEGORIES.length);
+  });
+
+  it("sends no note, because there is nothing left to type it into", () => {
+    const panel = readFileSync("src/components/coach/StuckPanel.tsx", "utf8");
+    expect(panel).not.toMatch(/note:/);
+    const route = readFileSync("src/app/api/tasks/[id]/stuck/route.ts", "utf8");
+    const body = route.slice(route.indexOf("const Body"), route.indexOf("export async function"));
+    expect(body).not.toMatch(/^\s*note:/m);
+  });
+
+  /**
+   * The prompt used to say "take what they typed more seriously than the
+   * reason they picked". With the box gone that pointed at nothing, so it had
+   * to be rewritten rather than left as a dangling instruction — and
+   * "Something else" had to get its own guidance, since that is the case the
+   * free text was carrying.
+   */
+  it("no longer asks the model to weigh text that cannot exist", () => {
+    expect(UNBLOCK_SYSTEM).not.toMatch(/what they typed|their own words|typed a line/i);
+    expect(unwrapped(UNBLOCK_SYSTEM)).toContain("there is no free text");
+  });
+
+  it("tells the model what to do when the reason is Something else", () => {
+    const guidance = unwrapped(UNBLOCK_SYSTEM);
+    expect(guidance).toContain('If the reason they gave is "Something else"');
+    // The rule that matters: an unknown barrier is not licence to invent one.
+    expect(guidance).toMatch(/must not invent|do not guess at a feeling/i);
+    expect(guidance).toContain("Work from the task instead");
+  });
+
+  it("builds a prompt that never references a note", () => {
+    const prompt = unblockPrompt({
+      taskTitle: "Write the letter",
+      taskType: "deep_work",
+      estimatedMinutes: 90,
+      rationale: null,
+      goalLabel: "TIME Kid of the Year",
+      milestoneTitle: null,
+      reasonLabel: "Something else",
+      externalParty: null,
+    });
+    expect(prompt).toContain("What they said got in the way: Something else");
+    expect(prompt).not.toMatch(/own words|did not add anything/i);
+    // The task is what is left to reason from, so it has to all be there.
+    expect(prompt).toContain("Write the letter");
+    expect(prompt).toContain("deep work");
+    expect(prompt).toContain("90 minutes");
   });
 
   /**
