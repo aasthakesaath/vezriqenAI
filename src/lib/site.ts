@@ -181,12 +181,28 @@ export const PERSONALIZATION = {
 /* --------------------------------------------------------------------------
  * Homepage §6 — My Story teaser. Two lines and a link; the story itself stays
  * on /about, where §30.6 put it.
+ *
+ * First person, and it stays first person: this is the founder's own week, not
+ * a claim about the reader's. The turn-outward rule that governs /about starts
+ * at the Vezri block on that page and has no bearing here.
+ *
+ * The second line was "The hard part wasn't making it — it was following it."
+ * True, but it is the sentence every planner app writes, and the 2026-09-14
+ * pass replaced abstractions with the specific thing that actually happened.
+ * It also now says almost exactly what the closing line of /about says, which
+ * made the teaser a summary of the payoff rather than a reason to go and read
+ * it.
+ *
+ * Both lines have to survive on ONE visual line each: they render as a couplet
+ * at `text-lg` inside `max-w-lg` with `mt-1` between them, which is about 57
+ * characters. A second line that wraps turns the couplet into three lines and
+ * loses the beat.
  * ---------------------------------------------------------------------- */
 export const STORY_TEASER = {
   heading: "Built From a Real Problem \u2665",
   lines: [
     "I had an SAT study plan.",
-    "The hard part wasn\u2019t making it \u2014 it was following it.",
+    "It stopped matching the week I was actually having.",
   ],
   cta: `Read ${MY_STORY_LABEL}`,
 } as const;
