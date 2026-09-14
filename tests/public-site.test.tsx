@@ -19,14 +19,22 @@ import {
   CTA_SUPPORT,
   CTA_SUPPORT_SHORT,
   FINAL_CTA_HOME,
+  FINAL_CTA_STORY,
   HERO,
   HOW_IT_WORKS,
   HOW_IT_WORKS_TITLE,
+  MASCOT,
+  MY_STORY_EYEBROW,
   MY_STORY_LABEL,
+  MY_STORY_PARAGRAPHS_OUTWARD,
+  MY_STORY_PILLARS,
   MY_STORY_PULLQUOTE,
+  MY_STORY_SUBHEAD,
+  MY_STORY_VEZRI,
   PERSONALIZATION,
   ROUTES,
   STORY_IMAGE_ALT,
+  STORY_IMAGE_NOTE,
   STORY_TEASER,
   THINKS_AHEAD,
   THINKS_AHEAD_HEADING,
@@ -337,9 +345,33 @@ describe("the Vezri avatar", () => {
 
 describe("My Story page (PRD §30.6, §30.13)", () => {
   it("uses the approved eyebrow, headline and subhead", () => {
-    expect(aboutText).toContain("A real student. A real problem. A bigger purpose.");
+    expect(aboutText).toContain(MY_STORY_EYEBROW);
     expect(aboutText).toContain(`Why I Built ${BRAND}`);
-    expect(aboutText).toContain("Sometimes a personal challenge can lead to something bigger.");
+    expect(aboutText).toContain(MY_STORY_SUBHEAD);
+    expect(aboutText).toContain(STORY_IMAGE_NOTE);
+  });
+
+  /**
+   * The register §30.6 rules out, asserted as a list because every one of these
+   * was on this page before the 2026-09-14 copy pass and each is the kind of
+   * line that gets added back one at a time without anyone objecting to it.
+   */
+  it("keeps the inspirational register off the page", () => {
+    for (const phrase of [
+      "journey",
+      "empower",
+      "unlock your potential",
+      "a bigger purpose",
+      "something bigger",
+      "brighter tomorrow",
+      "every dream",
+      "you\u2019ve got this",
+      "you deserve",
+    ]) {
+      expect(aboutText.toLowerCase()).not.toContain(phrase);
+    }
+    // Written to a student, not at one.
+    expect(aboutText).not.toContain("!");
   });
 
   it("contains the SAT-origin story and the founder attribution", () => {
@@ -350,8 +382,19 @@ describe("My Story page (PRD §30.6, §30.13)", () => {
   });
 
   it("ends with a sign-up CTA", () => {
-    expect(aboutText).toContain("Let's make it happen.");
+    expect(aboutText).toContain(FINAL_CTA_STORY.heading);
+    expect(aboutText).toContain(FINAL_CTA_STORY.support);
     expect(about).toContain(`href="${ROUTES.signUp}"`);
+  });
+
+  it("names a moment on every pillar and says what Vezri does in it", () => {
+    expect(MY_STORY_PILLARS).toHaveLength(4);
+    for (const pillar of MY_STORY_PILLARS) {
+      expect(aboutText).toContain(pillar.title);
+      expect(aboutText).toContain(pillar.body);
+      // A moment the reader has had, not a feature name and not a policy.
+      expect(pillar.title).toMatch(/^When /);
+    }
   });
 
   /**
@@ -393,6 +436,83 @@ describe("My Story page (PRD §30.6, §30.13)", () => {
 
   it("does not make a phone download the 1448px original", () => {
     expect(about).toContain('sizes="(max-width: 1200px) 100vw, 1200px"');
+  });
+});
+
+/**
+ * The Vezri block (§30.6) — and the rule it exists to carry.
+ *
+ * It is the hinge of the page: above it the founder is talking about herself,
+ * below it the page is talking to the reader. Most of what follows asserts
+ * that hinge rather than the wording, because the wording is allowed to change
+ * and the order is not.
+ */
+describe("the Vezri block on My Story (PRD §30.6)", () => {
+  it("introduces her by name and carries both paragraphs", () => {
+    expect(aboutText).toContain(MY_STORY_VEZRI.heading);
+    for (const paragraph of MY_STORY_VEZRI.body) {
+      expect(aboutText).toContain(paragraph);
+    }
+  });
+
+  it("sits after the SAT story and before the turn outward", () => {
+    const built = aboutText.indexOf(`So I built ${BRAND}.`);
+    const vezri = aboutText.indexOf(MY_STORY_VEZRI.heading);
+    const outward = aboutText.indexOf(MY_STORY_PARAGRAPHS_OUTWARD[0]);
+    for (const index of [built, vezri, outward]) expect(index).toBeGreaterThan(-1);
+    expect(built).toBeLessThan(vezri);
+    expect(vezri).toBeLessThan(outward);
+  });
+
+  /**
+   * The rule no single copy constant can hold, so it is asserted against the
+   * whole rendered page: once this page addresses the reader it does not go
+   * back. "The goal is yours." is the sentence that turns it.
+   *
+   * The founder's byline is the one thing below the turn that names her, and
+   * it names her in the third person — so it passes, and for the right reason.
+   */
+  it("never snaps back to the first person after it turns outward", () => {
+    const [before, after] = aboutText.split("The goal is yours.");
+    expect(after).toBeTruthy();
+    // The half above the turn is still hers, or the split proved nothing.
+    expect(before).toMatch(/\bI\b/);
+    expect(after).not.toMatch(/\b(I|my|me)\b/i);
+  });
+
+  it("uses a pose the hero does not, so the archery motif is not repeated", () => {
+    expect(about).toContain(MY_STORY_VEZRI.imageSrc);
+    // vezri.webp is the drawn bow and target. The artwork at the top of this
+    // page is already that picture; twice on one page reads as one drawing.
+    expect(MY_STORY_VEZRI.imageSrc).not.toBe("/brand/vezri.webp");
+  });
+
+  it("describes her instead of calling her a mascot, and never with an empty alt", () => {
+    // §30.11. She carries part of the argument here — a reader who cannot see
+    // the drawing still needs to be told she is working out a route to a
+    // summit, because that is what the words beside her claim she does.
+    expect(about).toContain(`alt="${MY_STORY_VEZRI.imageAlt}"`);
+    expect(about).not.toMatch(/<img[^>]*alt=""[^>]*brand\/vezri-thinking/);
+    for (const lazy of ["mascot", "logo", "image of", "picture of", "illustration"]) {
+      expect(MY_STORY_VEZRI.imageAlt.toLowerCase()).not.toContain(lazy);
+    }
+    expect(MY_STORY_VEZRI.imageAlt).toContain(MASCOT);
+  });
+
+  it("stacks the mascot above the text on a phone and puts them side by side on desktop", () => {
+    // flex-col until sm:flex-row, so the stack order IS the source order and
+    // there is no order- class that can drift out of step with it.
+    expect(about).toMatch(/flex flex-col[^"]*sm:flex-row/);
+    expect(about.indexOf("vezri-thinking")).toBeLessThan(
+      about.indexOf(MY_STORY_VEZRI.heading),
+    );
+  });
+
+  it("borrows no new type sizes for the block", () => {
+    // The body is the story's own size and the heading is the hero caption's.
+    // Anything else would be a scale invented for one block.
+    expect(about).toMatch(/text-\[1\.05rem\]/);
+    expect(about).toMatch(/id="meet-vezri" class="text-xl font-semibold text-ink"/);
   });
 });
 

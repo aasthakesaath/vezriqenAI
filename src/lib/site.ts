@@ -181,12 +181,28 @@ export const PERSONALIZATION = {
 /* --------------------------------------------------------------------------
  * Homepage §6 — My Story teaser. Two lines and a link; the story itself stays
  * on /about, where §30.6 put it.
+ *
+ * First person, and it stays first person: this is the founder's own week, not
+ * a claim about the reader's. The turn-outward rule that governs /about starts
+ * at the Vezri block on that page and has no bearing here.
+ *
+ * The second line was "The hard part wasn't making it — it was following it."
+ * True, but it is the sentence every planner app writes, and the 2026-09-14
+ * pass replaced abstractions with the specific thing that actually happened.
+ * It also now says almost exactly what the closing line of /about says, which
+ * made the teaser a summary of the payoff rather than a reason to go and read
+ * it.
+ *
+ * Both lines have to survive on ONE visual line each: they render as a couplet
+ * at `text-lg` inside `max-w-lg` with `mt-1` between them, which is about 57
+ * characters. A second line that wraps turns the couplet into three lines and
+ * loses the beat.
  * ---------------------------------------------------------------------- */
 export const STORY_TEASER = {
   heading: "Built From a Real Problem \u2665",
   lines: [
     "I had an SAT study plan.",
-    "The hard part wasn\u2019t making it \u2014 it was following it.",
+    "It stopped matching the week I was actually having.",
   ],
   cta: `Read ${MY_STORY_LABEL}`,
 } as const;
@@ -197,20 +213,125 @@ export const FINAL_CTA_HOME = {
   support: `Upload it. Let ${MASCOT} help you keep moving.`,
 } as const;
 
-/** PRD §30.6 — approved My Story narrative, kept as data so it stays verbatim. */
+/* --------------------------------------------------------------------------
+ * PRD §30.6 — the My Story narrative.
+ *
+ * Still verbatim from the PRD; it is just a later PRD. The owner directed a
+ * copy pass on 2026-09-14 and §30.6 was rewritten in the same commit, so the
+ * spec and the page did not drift apart. Two things came out of that pass and
+ * both are rules rather than preferences:
+ *
+ *   ONE READER. A student who set a goal and could not hold themselves to it.
+ *   Written to, not down to — no teen-speak, no exclamation marks. The SAT
+ *   specifics stay: they are what makes the story land, and the shape of it —
+ *   a plan that stopped matching the week — is recognisable to a student who
+ *   is not sitting that exam.
+ *
+ *   THE PAGE TURNS OUTWARD AT MY_STORY_VEZRI AND STAYS TURNED. Everything
+ *   above it is first person. Everything below it addresses the reader and
+ *   never snaps back. No constant here can hold that on its own, so
+ *   tests/public-site.test.tsx asserts it against the rendered page.
+ *
+ * The register the pass removed, for anyone adding copy later: "a bigger
+ * purpose", "something bigger", "brighter tomorrow", "For Every Dream",
+ * "You've Got This", "you deserve a partner".
+ * ---------------------------------------------------------------------- */
+export const MY_STORY_EYEBROW = "A real student. A real problem. One falcon.";
+export const MY_STORY_SUBHEAD = "It started with a study plan I couldn\u2019t keep.";
+
 export const MY_STORY_PARAGRAPHS = [
   `I created ${BRAND} while I was preparing for the SAT.`,
-  "I had a detailed study plan, but I kept falling behind. Some days I didn't know how to start. Other days school and life got busy. A reminder could tell me what I missed, but it didn't help me understand why \u2014 or what to do next.",
+  "I had a detailed study plan, but I kept falling behind. Some days I didn\u2019t know how to start. Other days school ran long or something came up, and the plan carried on describing a week I wasn\u2019t having. A reminder could tell me what I\u2019d missed. It couldn\u2019t tell me why, or what to do next.",
 ] as const;
 
 export const MY_STORY_PULLQUOTE =
   "I wanted something that understood me, helped me get unstuck, and kept me moving.";
 
-export const MY_STORY_PARAGRAPHS_AFTER = [
-  `So I built ${BRAND}.`,
-  `Now, ${MASCOT} helps people turn plans into real progress \u2014 whether the goal is an exam, a certification, a healthier routine, or a long-term dream like starting a company.`,
-  "Because having a plan is just the beginning. You deserve a partner that helps you follow through.",
+/** The last line in my own voice. Everything after the Vezri block is the reader's. */
+export const MY_STORY_PARAGRAPHS_AFTER = [`So I built ${BRAND}.`] as const;
+
+/**
+ * The Vezri block — the hinge of the page.
+ *
+ * The heading and the first paragraph are still mine; the second hands the
+ * goal to the reader, and nothing below it speaks in the first person again.
+ *
+ * The pose is `thinking`, not the archer in vezri.webp. The artwork at the top
+ * of the page is already a drawn bow aimed at a target, and using the archer
+ * again two blocks later makes it look like the brand owns one drawing. This
+ * pose carries a thought bubble with a winding route up to a flag, which is
+ * also the better picture for what the paragraph beside it claims: the way
+ * there, not the shot.
+ *
+ * It names the file directly rather than importing POSES from lib/vezri-poses.
+ * That map is product state -> pose and its alt text describes the STATE
+ * ("Vezri is working this out"). Nothing on a marketing page is in a product
+ * state, and borrowing it would let a change to the loading-card copy silently
+ * rewrite this description.
+ *
+ * Never alt="" and never "the mascot" (§30.11). Here the drawing carries part
+ * of the argument, so a reader who cannot see it is still told that she is
+ * working out a route to a summit — which is precisely what the words beside
+ * her claim she does.
+ */
+export const MY_STORY_VEZRI = {
+  heading: `Meet ${MASCOT}, My Falcon Guide`,
+  body: [
+    "I chose a falcon because reaching a goal takes more than a plan \u2014 it takes focus, timing, and the ability to adjust course.",
+    `The goal is yours. ${MASCOT} doesn\u2019t hit the target for you \u2014 she helps you aim, adjust when life gets in the way, and keep moving until you reach it.`,
+  ],
+  imageSrc: "/brand/vezri-thinking.webp",
+  imageWidth: 357,
+  imageHeight: 760,
+  imageAlt: `${MASCOT}, the ${BRAND} falcon: a dusty-rose bird with a flower tucked behind her ear and a small satchel over one wing, one claw at her chin, working out a winding route up to the flag at the summit`,
+} as const;
+
+/** After the Vezri block. Second person, and it stays that way. */
+export const MY_STORY_PARAGRAPHS_OUTWARD = [
+  `It doesn\u2019t have to be an exam. ${MASCOT} works the same way for a certification, a routine you want to hold to, or something long-term like starting a company.`,
+  "Making the plan is never the hard part. Following it is \u2014 and that part you don\u2019t have to do on your own.",
 ] as const;
+
+/**
+ * The four cards under the story. Each names a moment the reader has had, then
+ * says what Vezri does in it.
+ *
+ * They replace four that restated the prose directly above them and did it in
+ * the wrong voice: two in the first person, below the turn, and two ("For
+ * Every Dream", "You've Got This") in the register this page does not use.
+ *
+ * The titles follow the same rule as PERSONALIZATION above — describe the work
+ * or the week, never the person. "When a day gets missed", not "when you fall
+ * behind": the second is a diagnosis, and this product does not make them.
+ */
+export const MY_STORY_PILLARS = [
+  {
+    id: "next",
+    title: "When the next step isn\u2019t obvious",
+    body: `${MASCOT} works backward from your goal and names the one thing to do next.`,
+  },
+  {
+    id: "missed",
+    title: "When a day gets missed",
+    body: `It doesn\u2019t just move to tomorrow. ${MASCOT} works out what got in the way, then changes the plan around it.`,
+  },
+  {
+    id: "week",
+    title: "When the week doesn\u2019t cooperate",
+    body: "A test moves, something runs late, you get ill. The plan changes shape. The goal doesn\u2019t.",
+  },
+  {
+    id: "waiting",
+    title: "When something needs another person",
+    body: `A recommendation letter, a reply, a signature. ${MASCOT} counts backward from when it\u2019s due and tells you when to ask.`,
+  },
+] as const;
+
+/** §30.6's closing ask, kept beside the homepage's so the two stay in step. */
+export const FINAL_CTA_STORY = {
+  heading: "Have a goal ready? Let\u2019s make it happen.",
+  support: `Bring the plan you already have. ${MASCOT} takes it from there.`,
+} as const;
 
 export const FOUNDER = { name: "Nikita Tejwani", title: `Founder, ${BRAND}` } as const;
 
@@ -251,3 +372,14 @@ export const STORY_IMAGE_SRC = process.env.NEXT_PUBLIC_STORY_IMAGE ?? "/brand/st
  * Never alt="": this is content, not decoration.
  */
 export const STORY_IMAGE_ALT = `${FOUNDER.name} drawing a bow toward a target in a sunlit rose garden, with ${MASCOT}, the ${BRAND} falcon, at her shoulder`;
+
+/**
+ * The handwritten note under the artwork. Decorative, and still bound by the
+ * page's register: it replaced "Real challenges. Brighter tomorrow.", which is
+ * the exact inspirational move the 2026-09-14 pass took out everywhere else.
+ * This one describes what is actually in the picture instead.
+ *
+ * The heart is not in the string — the caption renders it as an aria-hidden
+ * span, so the motif §30.6 asks for is not read out as a word.
+ */
+export const STORY_IMAGE_NOTE = `${MASCOT} and me, aiming at the same thing.`;
