@@ -23,6 +23,7 @@ import {
 import { JSON_ONLY, PLAIN_VOICE, instructionSystem } from "@/lib/ai/voice";
 import { BLOCK_CATEGORIES, INTERVENTIONS_FOR } from "@/lib/coach/interventions";
 import StuckPanel from "@/components/coach/StuckPanel";
+import { isRetryableFailure } from "@/lib/ai/failure-copy";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: () => {}, push: () => {} }),
@@ -378,18 +379,29 @@ describe("model calls stay on the server", () => {
 });
 
 describe("a bad response is a retry, never a crash", () => {
-  it("marks the failure retryable on both routes", () => {
+  it("derives retryability from the kind rather than assuming it", () => {
     for (const file of [
       "src/app/api/tasks/[id]/guidance/route.ts",
       "src/app/api/tasks/[id]/stuck/route.ts",
     ]) {
       const route = readFileSync(file, "utf8");
       expect(route, file).toContain("AIExtractionError");
-      expect(route, file).toContain("retryable: true");
-      // 502 rather than a thrown error: an unhandled throw in a route is a
-      // 500 page, and the panel it came from is gone with it.
-      expect(route, file).toContain("{ status: 502 }");
+      // It used to be a hard-coded `retryable: true`, which offered a button
+      // for failures a retry cannot clear — a billing problem among them.
+      expect(route, file).toContain("isRetryableFailure(error.kind)");
+      expect(route, file).toContain("aiFailureStatus(error.kind)");
+      // Still never an unhandled throw: that is a 500 page, and the panel it
+      // came from goes with it.
+      expect(route, file).not.toMatch(/^\s*throw error;\s*$/m);
     }
+  });
+
+  it("still offers a retry for the failure that is worth retrying", () => {
+    // A model that answered with something unusable is the case the inline
+    // retry was built for, and it keeps it.
+    expect(isRetryableFailure("unusable_output")).toBe(true);
+    // A billing failure is not, and no longer pretends to be.
+    expect(isRetryableFailure("billing")).toBe(false);
   });
 
   it("shows the retry inline, in the panel that failed", () => {

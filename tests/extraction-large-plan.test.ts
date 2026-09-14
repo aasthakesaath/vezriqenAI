@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import type { z } from "zod";
 import { AnthropicProvider } from "@/lib/ai/anthropic";
+import { aiFailureMessage } from "@/lib/ai/failure-copy";
 import { AIExtractionError, AITruncationError } from "@/lib/ai/provider";
 import type { AIProvider, StructuredRequest } from "@/lib/ai/provider";
 import {
@@ -128,7 +129,16 @@ describe("truncation is detected, not mistaken for malformed output", () => {
     for (const jargon of PARSER_JARGON) {
       expect(error.message).not.toContain(jargon);
     }
-    expect(error.message).toBe("That plan is larger than Vezri can read in one pass.");
+    // The provider's own sentence is surface-neutral now — it cannot know
+    // which screen is asking, and the one it used to write ("that plan") is
+    // how extraction copy reached a task card. What it must still never do is
+    // put parser jargon in front of anyone, which is asserted above.
+    expect(error.kind).toBe("truncated");
+
+    // The plan wording lives where it is true: on the extraction surface.
+    expect(aiFailureMessage("extraction", error.kind)).toBe(
+      "That plan is larger than Vezri can read in one pass.",
+    );
   });
 
   it("records what actually happened for the server log", async () => {

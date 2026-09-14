@@ -4,6 +4,11 @@ import { loadOwnTask } from "@/lib/api/task-access";
 import { isTerminalTaskStatus, terminalStatusReason } from "@/lib/plan/task-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAIProvider, AIExtractionError } from "@/lib/ai";
+import {
+  aiFailureMessage,
+  aiFailureStatus,
+  isRetryableFailure,
+} from "@/lib/ai/failure-copy";
 import { AI_CONFIGURED } from "@/lib/env";
 import {
   GUIDANCE_SYSTEM,
@@ -142,10 +147,14 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     modelVersion = result.modelVersion;
   } catch (error) {
     if (!(error instanceof AIExtractionError)) throw error;
-    // A bad or unparseable response is a retry, not a crash. The message is
-    // already written for a human by lib/ai; `retryable` is what puts the
-    // button in the panel instead of an error page.
-    return NextResponse.json({ error: error.message, retryable: true }, { status: 502 });
+    // Worded for the steps panel, from the kind — see lib/ai/failure-copy.
+    return NextResponse.json(
+      {
+        error: aiFailureMessage("guidance", error.kind),
+        retryable: isRetryableFailure(error.kind),
+      },
+      { status: aiFailureStatus(error.kind) },
+    );
   }
 
   // ---- Cache it. The write is service-role; see the header. ---------------
