@@ -5,6 +5,9 @@ import {
   BLOCK_CATEGORIES,
   COACH_SYSTEM,
   INTERVENTIONS_FOR,
+  INTERVENTION_TYPES,
+  InterventionSchema,
+  RETIRED_INTERVENTION_TYPES,
   coachPrompt,
   fallbackIntervention,
   type BlockCategory,
@@ -179,15 +182,11 @@ describe("what the coach is told once the free text is gone", () => {
   /**
    * The panel has two buttons and no field. A question back from the coach is
    * a dead end — the user can only accept or decline it, and neither answers
-   * it. This is the prompt-side half of dropping "ask_user" from the barrier
-   * that now carries no detail at all.
+   * it. This is the prompt-side half of retiring "ask_user": the type is gone,
+   * and the instruction stops the same shape coming back in prose.
    */
   it("forbids asking a question the panel cannot take an answer to", () => {
     expect(unwrapped(COACH_SYSTEM)).toContain("Never ask the user a question");
-  });
-
-  it("never offers an unanswerable question as the intervention itself", () => {
-    expect(INTERVENTIONS_FOR.something_else).not.toContain("ask_user");
   });
 
   it("tells the model what to do when the barrier is Something else", () => {
@@ -227,6 +226,73 @@ describe("what the coach is told once the free text is gone", () => {
     expect(intervention.message).not.toContain("?");
     expect(intervention.proposal.new_task_title).toContain("Finish module 4");
     expect(INTERVENTIONS_FOR.something_else).toContain(intervention.intervention_type);
+  });
+});
+
+/**
+ * A panel that cannot take an answer must not be able to ask a question.
+ *
+ * "ask_user" invited a reply, and neither panel that shows an intervention has
+ * anywhere to put one: the coach offers "Let's do that" and "Not this time",
+ * and the "I'm stuck" panel offers an action, a split and a move. Leaving it on
+ * a single barrier only meant it fired eventually, so it is retired outright.
+ */
+describe("the intervention nobody could answer", () => {
+  it("is gone from the types the product can produce", () => {
+    expect(INTERVENTION_TYPES).not.toContain("ask_user");
+    expect(RETIRED_INTERVENTION_TYPES).toContain("ask_user");
+  });
+
+  it("is offered for no barrier at all, not merely for the vague one", () => {
+    for (const category of BLOCK_CATEGORIES) {
+      for (const retired of RETIRED_INTERVENTION_TYPES) {
+        expect(
+          INTERVENTIONS_FOR[category as BlockCategory] as readonly string[],
+          `${category} must not offer the retired ${retired}`,
+        ).not.toContain(retired);
+      }
+    }
+  });
+
+  it("cannot come back through the model either", () => {
+    // The schema is what the model's output is validated against, so a
+    // retired type is unreturnable rather than merely unasked-for.
+    const answer = {
+      intervention_type: "ask_user",
+      message: "What would the first step be?",
+      proposal: {
+        new_task_title: null,
+        new_task_minutes: null,
+        suggested_start: null,
+        revised_title: null,
+        follow_up_with: null,
+      },
+      reasoning: "",
+    };
+    expect(InterventionSchema.safeParse(answer).success).toBe(false);
+    expect(
+      InterventionSchema.safeParse({ ...answer, intervention_type: "shrink_first_step" }).success,
+    ).toBe(true);
+  });
+
+  it("never reappears as something that worked for this person before", () => {
+    // execution_blocks keeps every intervention ever offered, retired ones
+    // included, and §10 reads that history back into the prompt. A retired
+    // type surfacing there would recommend what nothing can choose.
+    const ranked = rankEffectiveInterventions({
+      effective_interventions: {
+        ask_user: { accepted: 5, offered: 5 },
+        shrink_first_step: { accepted: 2, offered: 4 },
+      },
+    });
+    expect(ranked).not.toContain("ask_user");
+    expect(ranked).toContain("shrink_first_step");
+  });
+
+  it("keeps the live list and the retired list disjoint", () => {
+    for (const retired of RETIRED_INTERVENTION_TYPES) {
+      expect(INTERVENTION_TYPES as readonly string[]).not.toContain(retired);
+    }
   });
 });
 

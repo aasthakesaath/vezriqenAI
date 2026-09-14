@@ -32,10 +32,33 @@ export const INTERVENTION_TYPES = [
   "reduce_scope",
   "move_lower_priority",
   "alternative_action",
-  "ask_user",
 ] as const;
 
 export type InterventionType = (typeof INTERVENTION_TYPES)[number];
+
+/**
+ * Interventions the product no longer offers, and why.
+ *
+ * `ask_user` — it asks the user a question, and neither panel that shows an
+ * intervention can take an answer. The Execution Block Coach offers "Let's do
+ * that" and "Not this time"; the "I'm stuck" panel offers an action, a split
+ * and a move. So the one response it invites is the one response impossible to
+ * give, and a question nobody can answer is the dead end §13 exists to remove.
+ * Both panels once had a free-text box beside the choices, which is presumably
+ * what it was written for; both boxes are gone.
+ *
+ * Retired 2026-09-14. Kept as a list rather than deleted, the way
+ * RETIRED_TASK_STATUSES is: it is what the guard test checks against, and it
+ * is the record of why the value went.
+ *
+ * THE DATABASE ENUM KEEPS IT. public.intervention_type is a Postgres enum
+ * (0003), and a value cannot be removed from one in place — it needs a new
+ * type, a column swap and a rewrite of every row still holding it. Those rows
+ * are the record of an intervention a person was actually offered, so
+ * rewriting them would be falsifying history to tidy a list. The enum stays
+ * permissive; nothing writes the value, because nothing can produce it.
+ */
+export const RETIRED_INTERVENTION_TYPES = ["ask_user"] as const;
 
 /**
  * Which interventions actually address which barrier.
@@ -47,17 +70,16 @@ export type InterventionType = (typeof INTERVENTION_TYPES)[number];
  */
 export const INTERVENTIONS_FOR: Record<BlockCategory, InterventionType[]> = {
   no_time: ["timebox", "reschedule_window", "move_lower_priority", "shrink_first_step"],
-  didnt_know_how_to_start: ["clarify_first_action", "shrink_first_step", "ask_user"],
+  didnt_know_how_to_start: ["clarify_first_action", "shrink_first_step"],
   felt_too_big: ["shrink_first_step", "split_task", "reduce_scope"],
   kept_avoiding: ["shrink_first_step", "timebox", "clarify_first_action"],
   waiting_on_someone: ["follow_up_other_person", "alternative_action", "resolve_prerequisite"],
   forgot: ["reschedule_window", "timebox"],
   priorities_changed: ["reduce_scope", "move_lower_priority", "alternative_action"],
-  // "ask_user" is gone from here. It asks a question, and this panel has two
-  // buttons — "Let's do that" and "Not this time" — with nowhere to type an
-  // answer. It was the first-listed option for the one barrier that now
-  // carries no detail at all, so it was also the most likely: a question the
-  // user cannot answer is the dead end §13 exists to remove.
+  // This barrier used to lead with "ask_user", which is now retired outright
+  // — see RETIRED_INTERVENTION_TYPES. It was the likeliest choice here, since
+  // this is the one barrier that carries no detail at all, but being likelier
+  // on one chip was never what made it wrong.
   something_else: ["clarify_first_action", "shrink_first_step"],
 };
 
