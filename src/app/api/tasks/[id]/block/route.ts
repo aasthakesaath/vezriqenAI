@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/api/auth";
+import { loadOwnTask, waitingOnName } from "@/lib/api/task-access";
 import { getAIProvider, AIExtractionError } from "@/lib/ai";
-import { AI_CONFIGURED, SUPABASE_CONFIGURED } from "@/lib/env";
+import { AI_CONFIGURED } from "@/lib/env";
 import {
   BLOCK_CATEGORIES,
   COACH_SYSTEM,
@@ -34,16 +35,11 @@ const BlockSchema = z
  * point is that the task must not be silently rescheduled.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  if (!SUPABASE_CONFIGURED) {
-    return NextResponse.json({ error: "Not configured." }, { status: 503 });
-  }
+  const auth = await requireUser("tasks/[id]/block");
+  if (!auth.ok) return auth.response;
+  const { supabase, user } = auth;
 
   const { id } = await context.params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
   const parsed = BlockSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -51,14 +47,29 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
   const category = parsed.data.category as BlockCategory;
 
-  const { data: task } = await supabase
-    .from("tasks")
-    .select(
-      "id, goal_id, title, task_type, estimated_minutes, deadline, goals(normalized_goal, user_goal_text), task_dependencies(external_party_name)",
-    )
-    .eq("id", id)
-    .maybeSingle();
-  if (!task) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  // The embed that was here — task_dependencies(external_party_name) — is the
+  // same ambiguous one that made /stuck answer 404 for a task that existed.
+  // This route had it too and nobody had pressed "Not done" on the new screen
+  // yet, so it was a 404 waiting to happen rather than one that had already.
+  const lookup = await loadOwnTask<{
+    id: string;
+    goal_id: string;
+    title: string;
+    status: string;
+    task_type: string;
+    estimated_minutes: number | null;
+    deadline: string | null;
+    goals: unknown;
+  }>({
+    supabase,
+    route: "tasks/[id]/block",
+    taskId: id,
+    columns:
+      "id, goal_id, title, status, task_type, estimated_minutes, deadline, goals(normalized_goal, user_goal_text)",
+    requireOutstanding: true,
+  });
+  if (!lookup.ok) return lookup.response;
+  const task = lookup.task;
 
   const goalJoin = Array.isArray(task.goals) ? task.goals[0] : task.goals;
   const goalTitle =
@@ -66,8 +77,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     (goalJoin as { user_goal_text?: string } | null)?.user_goal_text ??
     "your goal";
 
-  const deps = (task.task_dependencies ?? []) as Array<{ external_party_name: string | null }>;
-  const externalParty = deps.find((d) => d.external_party_name)?.external_party_name ?? null;
+  const externalParty = await waitingOnName({ supabase, taskId: id });
 
   const { data: profile } = await supabase
     .from("execution_profiles")

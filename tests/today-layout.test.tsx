@@ -185,6 +185,51 @@ describe("nothing is pulled into the box above it", () => {
 });
 
 /* ---------------------------------------------------------------------------
+ * A wrapped row must not land on the row above it.
+ *
+ * `flex-wrap` with only a horizontal gap is the same class of bug as the
+ * vertical negative margin above, arrived at from the other direction: nothing
+ * overlaps until the line wraps, and then every wrapped line sits hard against
+ * its predecessor. It shipped on the Today card's meta line — goal, milestone
+ * and estimate — which carries an h-4 icon inside a text-sm line box, so the
+ * second card, whose goal name is longer, wrapped first and collided.
+ *
+ * GoalTaskList's equivalent line has always had gap-y-1 and has never done it,
+ * which is the whole argument: the row gap is not decoration.
+ * ------------------------------------------------------------------------- */
+describe("a wrap container always has a row gap", () => {
+  it("never pairs gap-x with no gap-y on a flex-wrap row", () => {
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const path = join(dir, entry);
+        if (statSync(path).isDirectory()) {
+          walk(path);
+          continue;
+        }
+        if (!/\.tsx$/.test(entry)) continue;
+        for (const line of readFileSync(path, "utf8").split("\n")) {
+          if (!/\bflex-wrap\b/.test(line)) continue;
+          // `gap-N` on its own sets both axes and is fine. Only the split
+          // form can set one without the other.
+          if (!/\bgap-x-[0-9.]+/.test(line)) continue;
+          if (/\bgap-y-[0-9.]+/.test(line)) continue;
+          offenders.push(`${path}: ${line.trim().slice(0, 90)}`);
+        }
+      }
+    };
+    walk("src/components");
+    walk("src/app");
+    expect(offenders).toEqual([]);
+  });
+
+  it("proves it is looking at the line that broke", () => {
+    const source = readFileSync("src/components/app/TodayTasks.tsx", "utf8");
+    expect(source).toContain("gap-x-2.5 gap-y-1");
+  });
+});
+
+/* ---------------------------------------------------------------------------
  * The coach must be able to grow.
  *
  * §13 makes the Execution Block Coach the core interaction, and it opens

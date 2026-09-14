@@ -62,9 +62,27 @@ describe("what counts as late", () => {
     expect(anchorDay(task())).toBeNull();
   });
 
-  it("leaves work that is not open alone", () => {
-    for (const status of ["done", "blocked", "skipped", "not_done"]) {
-      expect(overdueTasks([task({ status, deadline: "2026-01-01" })], TODAY)).toEqual([]);
+  it("leaves work whose story is over alone", () => {
+    for (const status of ["done", "skipped"]) {
+      expect(overdueTasks([task({ status, deadline: "2026-01-01" })], TODAY), status).toEqual([]);
+    }
+  });
+
+  /**
+   * This used to filter on OPEN_TASK_STATUSES, which is the set that answers
+   * "does this belong on today's list" — it excludes `blocked` and `not_done`.
+   * So the two states a person reaches by telling Vezri something went wrong
+   * were the two the "start my plan from today" button refused to move, and
+   * their dates stayed in August while everything around them slid forward.
+   * See tests/task-state.test.ts for the same rule asserted over the whole
+   * enum, per route.
+   */
+  it("moves work that is stuck or was not done, which is most of why the button exists", () => {
+    for (const status of ["blocked", "not_done", "in_progress", "unconfirmed", "not_started"]) {
+      expect(
+        overdueTasks([task({ status, deadline: "2026-01-01" })], TODAY).map((t) => t.status),
+        status,
+      ).toEqual([status]);
     }
   });
 

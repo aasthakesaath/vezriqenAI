@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
-import { SUPABASE_CONFIGURED } from "@/lib/env";
+import { requireUser } from "@/lib/api/auth";
 
 export const runtime = "nodejs";
 
@@ -38,16 +37,11 @@ const TASK_STATUS: Record<string, string> = {
 };
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  if (!SUPABASE_CONFIGURED) {
-    return NextResponse.json({ error: "Not configured." }, { status: 503 });
-  }
+  const auth = await requireUser("tasks/[id]/checkin");
+  if (!auth.ok) return auth.response;
+  const { supabase, user } = auth;
 
   const { id } = await context.params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
   const parsed = CheckInSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

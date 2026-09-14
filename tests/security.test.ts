@@ -105,8 +105,25 @@ describe("every API route is either authenticated or deliberately public (PRD §
       const key = rel(file).replace(/\\/g, "/");
       const source = read(file);
       if (key in PUBLIC_ROUTES) continue;
-      expect(source, `${key} must call auth.getUser()`).toContain("auth.getUser()");
+      // Either form. requireUser is the shared helper the task and block
+      // routes moved onto after three of them answered 401 to a working
+      // session and the only way to compare them was to diff twenty files;
+      // the rest still call getUser directly. Both verify the token.
+      const checksSession =
+        source.includes("auth.getUser()") || source.includes("requireUser(");
+      expect(checksSession, `${key} must verify the session`).toBe(true);
     }
+  });
+
+  it("keeps the shared helper an actual verification, not a stub", () => {
+    // The indirection above is only safe while the helper does the work. It
+    // must call getUser — which revalidates against the auth server — and not
+    // getSession, which reads the cookie without verifying it and can be
+    // spoofed.
+    const helper = read(join(SRC, "lib", "api", "auth.ts"));
+    expect(helper).toContain("auth.getUser()");
+    expect(helper).not.toContain("auth.getSession()");
+    expect(helper).toContain("status: 401");
   });
 
   it("guards the cron endpoint with a secret and fails closed without one", () => {

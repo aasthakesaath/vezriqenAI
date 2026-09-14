@@ -1,6 +1,7 @@
 import Link from "next/link";
 import StartFromToday from "./StartFromToday";
 import TodayTasks, { type TodayTaskView } from "./TodayTasks";
+import WaitingOnList, { type WaitingOnView } from "./WaitingOnList";
 import VezriNote from "./VezriNote";
 import { APP_ROUTES } from "@/lib/routes";
 
@@ -20,13 +21,7 @@ import { APP_ROUTES } from "@/lib/routes";
  * is on /goals, which already lists it properly.
  */
 
-export type WaitingOnView = {
-  id: string;
-  title: string;
-  /** The person's name. §3 keeps it to a name: no invitation, no account. */
-  waitingOn: string | null;
-  goalLabel: string;
-};
+export type { WaitingOnView };
 
 /** §13 rows are informational; the page stays small at three of them too. */
 const WAITING_ON_LIMIT = 3;
@@ -105,19 +100,7 @@ export default function TodayScreen({
               <h2 id="waiting-heading" className="text-lg font-semibold text-ink">
                 Waiting on someone else
               </h2>
-              <ul className="mt-3 space-y-2">
-                {waitingOn.slice(0, WAITING_ON_LIMIT).map((task) => (
-                  <li key={task.id} className="rounded-xl border border-blush bg-white px-5 py-4">
-                    <p className="font-medium text-ink">{task.title}</p>
-                    {task.waitingOn && (
-                      <p className="mt-0.5 text-sm text-mauve">
-                        <span className="font-medium">Waiting on:</span> {task.waitingOn}
-                      </p>
-                    )}
-                    <p className="mt-0.5 text-sm text-mauve-light">{task.goalLabel}</p>
-                  </li>
-                ))}
-              </ul>
+              <WaitingOnList tasks={waitingOn.slice(0, WAITING_ON_LIMIT)} />
             </section>
           )}
 

@@ -154,7 +154,13 @@ export default function TodayTasks({ tasks }: { tasks: TodayTaskView[] }) {
                     <h3 className="mt-1.5 font-semibold leading-snug text-ink">{task.title}</h3>
                     <p className="mt-0.5 text-sm leading-relaxed text-mauve">{task.reason}</p>
 
-                    <p className="mt-1 flex flex-wrap items-center gap-x-2.5 text-sm text-mauve-light">
+                    {/* gap-y-1 is load-bearing. A flex-wrap row with only a horizontal
+                        gap puts each wrapped line hard against the one above it,
+                        and this row carries an h-4 icon in a text-sm line box —
+                        so the second card, whose goal name is longer, wrapped and
+                        collided. GoalTaskList's equivalent line always had the
+                        row gap and never did. */}
+                    <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-mauve-light">
                       {/* The goal is named on the CARD now that the sections
                           are gone. Wraps rather than truncating: a name that
                           has to be cut to fit is a name that should not have
