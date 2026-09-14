@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import VezriWorking, { POSE_FOR } from "@/components/VezriWorking";
 import { BLOCK_CHOICES, BLOCK_QUESTION, COACH_STEPS } from "@/lib/app-copy";
 
@@ -34,9 +34,12 @@ type Intervention = {
  * in a vaguer form. People typed into it and nothing happened, because the
  * chips were the submit and none had been clicked.
  *
- * So the chips select now and a button submits. One more tap, bought
- * deliberately: it gives the panel somewhere to show that a choice is
- * required, which is the thing that was missing.
+ * ONE TAP IS THE WHOLE INTERACTION. A confirm button stood here briefly,
+ * disabled until a chip was picked — an affordance that existed to say a
+ * choice was required, back when a text box made that ambiguous. With the box
+ * gone the chip IS the input and choosing is the only action on the screen, so
+ * the button was a tap that bought nothing. The tapped chip carries the wait
+ * itself instead.
  */
 export default function ExecutionBlockCoach({
   taskId,
@@ -51,8 +54,6 @@ export default function ExecutionBlockCoach({
 }) {
   const router = useRouter();
   const [intervention, setIntervention] = useState<Intervention | null>(null);
-  /** The chip that is selected. Null until one is, which is what gates submit. */
-  const [category, setCategory] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [applied, setApplied] = useState<"accepted" | "declined" | null>(null);
@@ -60,8 +61,19 @@ export default function ExecutionBlockCoach({
   // waiting state never appears for the one-field write that accepts or
   // declines an intervention.
   const [thinking, setThinking] = useState<string | null>(null);
+  /**
+   * The double-tap guard.
+   *
+   * `busy` cannot do this job: setState is asynchronous, so two taps landing
+   * in the same tick both read the old value and both fetch — and each request
+   * here writes an execution_blocks row and pays for a model call. A ref is
+   * set synchronously in the handler, so the second tap sees it immediately.
+   */
+  const inFlight = useRef(false);
 
   async function chooseBarrier(chosen: string) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setThinking(chosen);
     setError(null);
@@ -77,15 +89,18 @@ export default function ExecutionBlockCoach({
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
       setError(payload.error ?? "Couldn't work that out just now.");
       setBusy(false);
+      inFlight.current = false;
       return;
     }
     setIntervention((await response.json()) as Intervention);
     setThinking(null);
     setBusy(false);
+    inFlight.current = false;
   }
 
   async function respond(accepted: boolean) {
-    if (!intervention) return;
+    if (!intervention || inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     const response = await fetch(`/api/blocks/${intervention.block_id}/respond`, {
@@ -97,10 +112,12 @@ export default function ExecutionBlockCoach({
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
       setError(payload.error ?? "Couldn't save that.");
       setBusy(false);
+      inFlight.current = false;
       return;
     }
     setApplied(accepted ? "accepted" : "declined");
     setBusy(false);
+    inFlight.current = false;
     router.refresh();
   }
 
@@ -169,8 +186,14 @@ export default function ExecutionBlockCoach({
     );
   }
 
-  const chosen = BLOCK_CHOICES.find((choice) => choice.id === category);
-
+  /* ONE TAP IS THE WHOLE INTERACTION. See the note at the top of the file for
+   * the box that used to sit under these chips and the confirm button that
+   * briefly replaced it. The tapped chip has to carry the wait, or nothing
+   * says which barrier registered: it fills, takes a trailing ellipsis, and
+   * reports aria-busy, while the fieldset takes the rest out of reach. An
+   * ellipsis rather than a spinner, because globals.css collapses every
+   * animation under prefers-reduced-motion — a moving part would be the one
+   * signal that disappears for the people most likely to re-tap. */
   return (
     <div className="mt-4 rounded-xl border border-blush bg-blush-wash p-5">
       <fieldset disabled={busy}>
@@ -180,44 +203,30 @@ export default function ExecutionBlockCoach({
           &rdquo;.
         </p>
 
-        {/* A single-select group. aria-pressed carries the state a screen
-            reader needs; the border and fill carry it for everyone else, so
-            the selection is never colour alone (WCAG 1.4.1). */}
         <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={BLOCK_QUESTION}>
           {BLOCK_CHOICES.map((choice) => {
-            const selected = category === choice.id;
+            const pending = busy && thinking === choice.id;
             return (
               <button
                 key={choice.id}
                 type="button"
-                aria-pressed={selected}
-                onClick={() => setCategory(choice.id)}
-                className={`rounded-pill border px-4 py-2 text-sm transition-colors disabled:opacity-60 ${
-                  selected
+                // Only while it is true: aria-busy="false" on eight idle
+                // buttons is noise a screen reader has to read past.
+                aria-busy={pending || undefined}
+                onClick={() => void chooseBarrier(choice.id)}
+                className={`rounded-pill border px-4 py-2 text-sm transition-colors ${
+                  pending
                     ? "border-berry bg-berry font-semibold text-white"
-                    : "border-blush bg-white font-medium text-ink hover:bg-blush-light"
+                    : `border-blush bg-white font-medium text-ink ${
+                        busy ? "opacity-50" : "hover:bg-blush-light"
+                      }`
                 }`}
               >
                 {choice.label}
+                {pending && <span aria-hidden="true">&hellip;</span>}
               </button>
             );
           })}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <button
-            type="button"
-            onClick={() => chosen && void chooseBarrier(chosen.id)}
-            /* Disabled until a chip is picked — the affordance the free-text
-               box never gave. `disabled` rather than a click that shows an
-               error: a control that cannot do anything should look like it. */
-            disabled={!chosen || busy}
-            className="rounded-pill bg-berry px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-berry-deep disabled:cursor-not-allowed disabled:bg-mauve-light disabled:opacity-60"
-          >
-            Work out what to do
-          </button>
-
-          {!chosen && <span className="text-sm text-mauve">Pick one to carry on.</span>}
         </div>
       </fieldset>
 

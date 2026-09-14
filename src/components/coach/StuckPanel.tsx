@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Icon from "@/components/icons/Icon";
 import { BLOCK_CHOICES, BLOCK_QUESTION } from "@/lib/app-copy";
 
@@ -16,8 +16,14 @@ import { BLOCK_CHOICES, BLOCK_QUESTION } from "@/lib/app-copy";
  * The free text is gone too. It sat above the chips, before anything had been
  * picked, with no sign that picking was required — and it duplicated the
  * "Something else" chip in a vaguer form. People typed into it and nothing
- * happened, because the chips were the submit and none had been clicked. One
- * chip is the whole input now, and a disabled button says so.
+ * happened, because the chips were the submit and none had been clicked.
+ *
+ * ONE TAP IS THE WHOLE INTERACTION. A confirm button stood here briefly,
+ * disabled until a chip was picked — an affordance that existed to say a
+ * choice was required, back when a text box made that ambiguous. With the box
+ * gone the chip IS the input and choosing is the only action on the screen, so
+ * the button was a tap that bought nothing. The tapped chip carries the wait
+ * itself instead.
  *
  * Three screens, and the third is the point:
  *
@@ -62,16 +68,27 @@ export default function StuckPanel({
   onDone: () => void;
 }) {
   const router = useRouter();
-  /** The chip that is selected. Null until one is, which is what gates submit. */
+  /** The chip that was tapped. Kept after a failure so "Try again" knows it. */
   const [reason, setReason] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryable, setRetryable] = useState(false);
+  /**
+   * The double-tap guard.
+   *
+   * `busy` cannot do this job: setState is asynchronous, so two taps landing
+   * in the same tick both read the old value and both fetch — which on the
+   * commit and split actions would mean two writes. A ref is set synchronously
+   * in the handler, so the second tap sees it on the line after the first.
+   */
+  const inFlight = useRef(false);
 
   /** One request shape for all four actions; see the route for why. */
   async function send(body: Record<string, unknown>, busyKey: string) {
+    if (inFlight.current) return null;
+    inFlight.current = true;
     setBusy(busyKey);
     setError(null);
 
@@ -87,6 +104,7 @@ export default function StuckPanel({
       setError("That didn’t reach Vezri — check your connection and try again.");
       setRetryable(true);
       setBusy(null);
+      inFlight.current = false;
       return null;
     }
 
@@ -99,14 +117,21 @@ export default function StuckPanel({
       setError(payload.error ?? "Vezri couldn’t do that just now.");
       setRetryable(payload.retryable === true);
       setBusy(null);
+      inFlight.current = false;
       return null;
     }
 
     setBusy(null);
+    inFlight.current = false;
     return payload;
   }
 
   async function analyse(chosen: string) {
+    // Checked here as well as in send(), because the tapped chip is read from
+    // `reason`: without this a second tap on a DIFFERENT chip would move the
+    // waiting state onto a chip whose request was never sent.
+    if (inFlight.current) return;
+    setReason(chosen);
     const payload = await send(
       { action: "analyse", reason: chosen, check_in_id: checkInId ?? undefined },
       "analyse",
@@ -250,17 +275,24 @@ export default function StuckPanel({
 
   /* ---- 1. The barrier. --------------------------------------------------
    *
-   * ONE CHIP IS THE WHOLE INPUT. A free-text box used to sit under these:
-   * it appeared before anything was picked, gave no sign that picking was
-   * required, and said the same thing as the "Something else" chip in a
+   * ONE TAP IS THE WHOLE INTERACTION. A free-text box used to sit under these
+   * chips: it appeared before anything was picked, gave no sign that picking
+   * was required, and said the same thing as the "Something else" chip in a
    * vaguer way — so people typed into it and nothing happened, because the
    * chips were the submit and nobody had clicked one.
    *
-   * So the chips SELECT now and a button submits. That is one more tap than
-   * click-to-send, bought deliberately: it gives the panel somewhere to show
-   * that a choice is required, which is the thing that was missing.
+   * With the box gone the chip is the whole input, so there was nothing left
+   * for a confirm step to confirm; the button and its "Pick one to carry on."
+   * went with it. Choosing is now the only action on the screen.
+   *
+   * So the tapped chip has to carry the wait, or nothing says which reason
+   * registered: it fills, takes a trailing ellipsis, and reports aria-busy,
+   * while the fieldset takes the rest out of reach until the answer lands.
+   * The ellipsis rather than a spinner is deliberate — globals.css collapses
+   * every animation under prefers-reduced-motion, so a moving part would be
+   * the one signal that disappears for the people most likely to re-tap.
    */
-  const chosen = BLOCK_CHOICES.find((choice) => choice.id === reason);
+  const working = busy === "analyse";
 
   return (
     <div className="mt-4 rounded-xl border border-blush bg-blush-wash p-4 sm:p-5">
@@ -270,46 +302,30 @@ export default function StuckPanel({
           No judgement — this is how Vezri finds the smallest way into &ldquo;{taskTitle}&rdquo;.
         </p>
 
-        {/* A single-select group. aria-pressed carries the state a screen
-            reader needs; the border and fill carry it for everyone else, so
-            the selection is never colour alone (WCAG 1.4.1). */}
         <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={BLOCK_QUESTION}>
           {BLOCK_CHOICES.map((choice) => {
-            const selected = reason === choice.id;
+            const pending = working && reason === choice.id;
             return (
               <button
                 key={choice.id}
                 type="button"
-                aria-pressed={selected}
-                onClick={() => setReason(choice.id)}
-                className={`rounded-pill border px-4 py-2 text-sm transition-colors disabled:opacity-60 ${
-                  selected
+                // Only while it is true: aria-busy="false" on eight idle
+                // buttons is noise a screen reader has to read past.
+                aria-busy={pending || undefined}
+                onClick={() => void analyse(choice.id)}
+                className={`rounded-pill border px-4 py-2 text-sm transition-colors ${
+                  pending
                     ? "border-berry bg-berry font-semibold text-white"
-                    : "border-blush bg-white font-medium text-ink hover:bg-blush-light"
+                    : `border-blush bg-white font-medium text-ink ${
+                        working ? "opacity-50" : "hover:bg-blush-light"
+                      }`
                 }`}
               >
                 {choice.label}
+                {pending && <span aria-hidden="true">&hellip;</span>}
               </button>
             );
           })}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <button
-            type="button"
-            onClick={() => chosen && void analyse(chosen.id)}
-            /* Disabled until a chip is picked — the affordance the free-text
-               box never gave. `disabled` rather than a click that shows an
-               error: a control that cannot do anything should look like it. */
-            disabled={!chosen || busy !== null}
-            className="rounded-pill bg-berry px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-berry-deep disabled:cursor-not-allowed disabled:bg-mauve-light disabled:opacity-60"
-          >
-            {busy === "analyse" ? "Thinking…" : "Work out what to do"}
-          </button>
-
-          {!chosen && (
-            <span className="text-sm text-mauve">Pick one to carry on.</span>
-          )}
         </div>
       </fieldset>
 
