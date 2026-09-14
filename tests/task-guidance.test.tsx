@@ -23,6 +23,7 @@ import {
 } from "@/lib/coach/unblock";
 import { JSON_ONLY, PLAIN_VOICE, instructionSystem } from "@/lib/ai/voice";
 import { BLOCK_CATEGORIES, INTERVENTIONS_FOR } from "@/lib/coach/interventions";
+import { BLOCK_CHOICES } from "@/lib/app-copy";
 import StuckPanel from "@/components/coach/StuckPanel";
 import { isRetryableFailure } from "@/lib/ai/failure-copy";
 
@@ -286,8 +287,9 @@ describe("the panel offers three routes and every one of them writes", () => {
 
   it("starts by asking the one question §13 asks", () => {
     expect(text(markup)).toContain("What got in the way?");
-    // The eight choices plus one submit. No ninth chip, no text box.
-    expect(markup.match(/<button/g)).toHaveLength(BLOCK_CATEGORIES.length + 1);
+    // The eight choices and nothing else: no ninth chip, no text box, and no
+    // submit — a tap on a chip IS the submit.
+    expect(markup.match(/<button/g)).toHaveLength(BLOCK_CATEGORIES.length);
   });
 
   /**
@@ -306,17 +308,29 @@ describe("the panel offers three routes and every one of them writes", () => {
     expect(text(markup)).toContain("Something else");
   });
 
-  it("disables the submit until a chip is picked, and says why", () => {
-    // The affordance the text box never gave. `disabled` rather than a click
-    // that shows an error: a control that can do nothing should look like it.
-    const submit = markup.slice(markup.lastIndexOf("<button"));
-    expect(submit).toContain("disabled");
-    expect(text(markup)).toContain("Pick one to carry on.");
+  /**
+   * There is no confirm step.
+   *
+   * A "Work out what to do" button stood here briefly, disabled until a chip
+   * was picked. That affordance existed to say a choice was required, which
+   * only needed saying while a text box made it ambiguous what counted as
+   * input. With the box gone the chip IS the input and choosing is the only
+   * action on the screen, so confirming it was a tap for nothing.
+   */
+  it("asks for no confirmation, because there is nothing left to confirm", () => {
+    expect(text(markup)).not.toContain("Pick one to carry on.");
+    expect(text(markup)).not.toContain("Work out what to do");
+    // Every button on this screen is one of the reasons.
+    const labels = BLOCK_CHOICES.map((choice) => choice.label);
+    for (const label of labels) expect(text(markup)).toContain(label);
   });
 
-  it("makes the selected chip readable without relying on colour", () => {
-    // Single-select, so every chip carries its state for a screen reader.
-    expect(markup.match(/aria-pressed="false"/g)).toHaveLength(BLOCK_CATEGORIES.length);
+  it("claims no state at rest", () => {
+    // The chips are not a toggle any more, so aria-pressed would be a lie,
+    // and aria-busy="false" on eight idle buttons is noise a screen reader
+    // has to read past. Both appear only once something is in flight.
+    expect(markup).not.toContain("aria-pressed");
+    expect(markup).not.toContain("aria-busy");
   });
 
   it("sends no note, because there is nothing left to type it into", () => {
